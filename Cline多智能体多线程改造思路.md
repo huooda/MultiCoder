@@ -6,7 +6,7 @@ Cline 是一个 VSCode 扩展，提供了代码编辑辅助功能，核心特点
 
 ## 2. 多智能体多线程改造目标
 
-将 Cline 改造为多智能体多线程系统，使得多个 AI 智能体可以并行工作，提高效率和功能性。
+将 Cline 改造为多智能体多线程系统，使得多个 AI 智能体可以并行工作，提高效率和功能性。**重要的是，我们将基于 Cline 现有的架构和功能进行改造，重用已开发的组件，而非从头开始。**
 
 ## 3. 初始改造方案：双智能体协作系统
 
@@ -15,6 +15,7 @@ Cline 是一个 VSCode 扩展，提供了代码编辑辅助功能，核心特点
 ### 3.1 智能体类型
 
 1. **计划智能体（Planner Agent）**：
+   - 继承和扩展 Cline 现有的 AI 模型
    - 负责理解用户需求
    - 制定解决方案和实施计划
    - 决定是否需要创建代码智能体
@@ -23,59 +24,67 @@ Cline 是一个 VSCode 扩展，提供了代码编辑辅助功能，核心特点
 
 2. **代码智能体（Coder Agent）**：
    - 由计划智能体按需创建
-   - 在独立线程和窗口中工作
+   - 复用 Cline 的执行模式功能
    - 根据计划智能体的指导实现具体代码
    - 完成任务后向计划智能体汇报
 
-### 3.2 系统架构
+### 3.2 系统架构扩展
+
+我们将在现有 Cline 架构基础上添加新的组件：
 
 ```
 src/
-  ├── agents/
-  │   ├── BaseAgent.ts           // 智能体基类
+  ├── agents/                    // 新增组件
+  │   ├── BaseAgent.ts           // 基于Cline类抽象的基础智能体
   │   ├── PlannerAgent.ts        // 计划智能体
   │   ├── CoderAgent.ts          // 代码智能体 
   │   └── AgentManager.ts        // 智能体管理器
   │
-  ├── coordination/
+  ├── coordination/              // 新增组件
   │   ├── MessageBus.ts          // 智能体间通信总线
   │   └── TaskQueue.ts           // 任务队列管理
   │
-  └── webview/
-      ├── AgentChatView.ts       // 智能体聊天界面
+  └── webview/                   // 扩展现有组件
+      ├── AgentChatView.ts       // 基于现有聊天界面扩展
       └── AgentUIManager.ts      // 界面管理器
 ```
 
 ## 4. 提示词设计与工具调用模式
 
-Cline 使用工具调用系统允许智能体与外部系统交互。我们将按照类似的模式，实现计划智能体创建代码智能体的功能。
+我们将扩展 Cline 现有的工具调用系统，添加创建代码智能体的功能。
 
-### 4.1 工具调用定义
+### 4.1 扩展工具调用定义
 
-在 Cline 的工具调用系统中，我们需要添加一个新的工具：
+在 Cline 的现有 `toolUseNames` 中添加新工具：
 
 ```typescript
 // 在现有的 toolUseNames 中添加
 export const toolUseNames = [
-  // 现有工具...
+  // 保留现有工具...
   "execute_command",
   "read_file",
   "write_to_file",
+  "replace_in_file",
+  "search_files",
+  "list_files",
   // 新增工具
   "create_coder_agent",
 ] as const
 ```
 
-### 4.2 工具参数定义
+### 4.2 扩展工具参数定义
 
-为"创建代码智能体"工具添加参数：
+为"创建代码智能体"工具添加参数，复用现有参数系统：
 
 ```typescript
 // 在现有的 toolParamNames 中添加
 export const toolParamNames = [
-  // 现有参数...
+  // 保留现有参数...
   "command",
+  "requires_approval",
   "path",
+  "content",
+  "diff",
   // 新增参数
   "task_description",
   "code_style",
@@ -83,9 +92,9 @@ export const toolParamNames = [
 ] as const
 ```
 
-### 4.3 系统提示词设计
+### 4.3 扩展系统提示词
 
-修改系统提示词，添加创建代码智能体的工具描述：
+在现有的 `SYSTEM_PROMPT` 函数中添加新工具描述，保持与现有格式一致：
 
 ```typescript
 // 在 SYSTEM_PROMPT 中添加新工具描述
@@ -105,14 +114,16 @@ Usage:
 `
 ```
 
-### 4.4 计划智能体提示词
+### 4.4 智能体特定提示词
 
-计划智能体的提示词应该包含关于何时以及如何使用代码智能体的指导：
+为计划智能体添加特定的工作流程指导，作为 Cline 现有系统提示词的补充：
 
-```
-你是计划智能体，负责理解用户需求、制定解决方案并协调代码智能体的工作。
+```typescript
+// 添加到 addUserInstructions 中计划模式下的指导
+`
+## 计划智能体指导
 
-## 工作流程：
+当你作为计划智能体工作时，请遵循以下流程：
 1. 分析用户请求和要求
 2. 制定解决方案的高级计划
 3. 评估任务复杂性，决定是否需要创建代码智能体：
@@ -125,259 +136,164 @@ Usage:
 5. 继续与用户交互，同时监控代码智能体的进度
 6. 收到代码智能体的成果后，进行审查并向用户报告
 
-## 指导原则：
-- 优先为大型代码实现或需要专注开发的任务创建代码智能体
-- 提供给代码智能体明确的目标和约束
-- 保持对整体解决方案的掌控
-- 适时地向用户报告进度和结果
+优先为大型代码实现或需要专注开发的任务创建代码智能体，确保提供明确的目标和约束。
+`
 ```
 
-### 4.5 代码智能体提示词
+### 4.5 集成到现有工具处理流程
 
-代码智能体的提示词应该更专注于代码实现：
-
-```
-你是代码智能体，专注于高质量代码的实现。你由计划智能体创建，并基于特定任务进行工作。
-
-## 工作流程：
-1. 分析从计划智能体收到的任务描述、代码风格和技术要求
-2. 规划代码实现的具体步骤
-3. 实现所需代码，确保符合要求和最佳实践
-4. 测试和优化你的实现
-5. 完成后，向计划智能体报告结果
-
-## 指导原则：
-- 专注于代码质量和效率
-- 严格遵循提供的代码风格指南
-- 提供详细的注释和文档
-- 考虑边缘情况和错误处理
-- 在复杂决策点主动请求计划智能体的指导
-```
-
-### 4.6 创建代码智能体的实现逻辑
-
-在 `Cline` 类中，我们需要添加处理 `create_coder_agent` 工具调用的逻辑：
+扩展 `Cline` 类中处理工具调用的部分，添加对 `create_coder_agent` 工具的支持：
 
 ```typescript
-// Cline 类中添加的方法
-async handleCreateCoderAgentTool(block: ToolUse, pushToolResult: (result: any) => void) {
-  try {
+// 在 Cline 类的 presentAssistantMessage 方法中添加新工具处理
+async presentAssistantMessage() {
+  // 保留现有代码...
+  
+  // 添加新工具处理
+  if (block.name === "create_coder_agent") {
     const { task_description, code_style, requirements } = block.params;
     
-    // 验证必要参数
+    // 验证必要参数，复用现有的参数验证逻辑
     if (!task_description) {
       this.consecutiveMistakeCount++;
       pushToolResult(await this.sayAndCreateMissingParamError("create_coder_agent", "task_description"));
-      return;
+      break;
     }
     
     if (!code_style) {
       this.consecutiveMistakeCount++;
       pushToolResult(await this.sayAndCreateMissingParamError("create_coder_agent", "code_style"));
-      return;
+      break;
     }
     
     if (!requirements) {
       this.consecutiveMistakeCount++;
       pushToolResult(await this.sayAndCreateMissingParamError("create_coder_agent", "requirements"));
-      return;
+      break;
     }
     
-    // 重置错误计数
+    // 重置错误计数，复用现有逻辑
     this.consecutiveMistakeCount = 0;
     
-    // 创建代码智能体的请求数据
-    const coderAgentRequest = {
-      taskDescription: task_description,
-      codeStyle: code_style,
-      requirements: requirements
-    };
-    
-    // 创建代码智能体
-    const coderAgentId = await AgentManager.getInstance().createCoderAgent({
-      plannerAgentId: this.taskId,
-      taskSpec: coderAgentRequest
-    });
-    
-    // 向用户显示通知
-    await this.say(
-      "text",
-      `已创建代码智能体来处理任务："${task_description.substring(0, 50)}${
-        task_description.length > 50 ? "..." : ""
-      }"`
-    );
-    
-    // 返回工具执行结果
-    pushToolResult(
-      formatResponse.toolResult(
-        `代码智能体已创建，ID: ${coderAgentId.substring(0, 8)}。该智能体将在独立任务队列中工作，完成后会向你报告结果。`
-      )
-    );
-    
-    await this.saveCheckpoint();
-  } catch (error) {
-    await this.handleError("创建代码智能体", error);
-  }
-}
-```
-
-## 5. 技术可行性分析与解决方案
-
-### 5.1 VSCode窗口支持问题
-
-VSCode对插件提供了多种UI表现形式，但存在一些限制：
-
-#### 5.1.1 Webview面板
-
-- **支持情况**：VSCode支持插件创建多个Webview面板（Panel）或Webview视图（View）
-- **限制**：
-  - 同类型的视图在同一时间通常只能显示一个实例
-  - 打开太多面板会使界面拥挤，影响用户体验
-
-#### 5.1.2 推荐实现方案
-
-```typescript
-// 创建新的Webview面板
-export function createAgentPanel(context: vscode.ExtensionContext, agentId: string): vscode.WebviewPanel {
-  const panel = vscode.window.createWebviewPanel(
-    `cline.agent.${agentId}`, // 唯一ID
-    `智能体 ${agentId.substring(0, 6)}`, // 标题
-    vscode.ViewColumn.Beside, // 显示位置
-    {
-      enableScripts: true,
-      retainContextWhenHidden: true
+    try {
+      // 创建代码智能体
+      const coderAgentId = await AgentManager.getInstance().createCoderAgent({
+        plannerAgentId: this.taskId,
+        taskSpec: {
+          taskDescription: task_description,
+          codeStyle: code_style,
+          requirements: requirements
+        }
+      });
+      
+      // 向用户显示通知，复用 say 方法
+      await this.say(
+        "text",
+        `已创建代码智能体来处理任务："${task_description.substring(0, 50)}${
+          task_description.length > 50 ? "..." : ""
+        }"`
+      );
+      
+      // 返回工具执行结果，复用 formatResponse
+      pushToolResult(
+        formatResponse.toolResult(
+          `代码智能体已创建，ID: ${coderAgentId.substring(0, 8)}。该智能体将在独立任务队列中工作，完成后会向你报告结果。`
+        )
+      );
+      
+      // 复用现有检查点保存逻辑
+      await this.saveCheckpoint();
+    } catch (error) {
+      await this.handleError("创建代码智能体", error);
     }
-  );
-  
-  // 设置内容和处理逻辑...
-  
-  return panel;
-}
-```
-
-### 5.2 替代多窗口的UI方案
-
-#### 5.2.1 方案1：对话聊天群组模式（推荐）
-
-可以采用类似微信群聊的界面，同时显示多个智能体的对话：
-
-- **实现方式**：使用单一Webview，内部通过CSS/HTML/JS实现多智能体聊天界面
-- **优势**：用户能同时看到所有智能体的响应和互动
-- **技术实现**：
-
-```typescript
-// 消息数据结构
-interface ChatMessage {
-  agentId: string;
-  agentName: string; // 如"计划智能体"，"代码智能体"
-  agentType: AgentType;
-  content: string;
-  timestamp: number;
-  isUser: boolean;
-}
-
-// 发送消息到WebView
-function sendMessageToWebview(webview: vscode.Webview, message: ChatMessage): void {
-  webview.postMessage({
-    type: 'newMessage',
-    message
-  });
-}
-```
-
-#### 5.2.2 方案2：选项卡式界面
-
-- **实现方式**：在单一Webview中实现选项卡切换不同智能体的对话
-- **优势**：界面整洁，易于管理多个智能体
-- **技术实现**：使用CSS和JavaScript在Webview内部实现选项卡切换
-
-#### 5.2.3 方案3：侧边栏视图组合
-
-- **实现方式**：利用VSCode的侧边栏视图组合多个智能体界面
-- **优势**：符合VSCode原生UI风格，用户熟悉
-- **技术代码**：
-
-```typescript
-// 注册多个Webview视图提供者
-context.subscriptions.push(
-  vscode.window.registerWebviewViewProvider(
-    'cline.plannerView',
-    new PlannerWebviewProvider(context)
-  )
-);
-
-context.subscriptions.push(
-  vscode.window.registerWebviewViewProvider(
-    'cline.coderView',
-    new CoderWebviewProvider(context)
-  )
-);
-```
-
-### 5.3 多线程支持问题
-
-VSCode插件环境中的多线程/多进程支持有限：
-
-#### 5.3.1 方案1：使用Node.js的Worker Threads
-
-```typescript
-// 在VSCode扩展中使用Worker Threads
-import { Worker } from 'worker_threads';
-import * as path from 'path';
-
-// 创建工作线程
-const worker = new Worker(
-  path.join(__dirname, 'coderAgentWorker.js'),
-  { 
-    workerData: { 
-      agentId, 
-      taskSpec 
-    } 
+    
+    break;
   }
-);
-
-// 处理消息
-worker.on('message', (message) => {
-  // 处理来自工作线程的消息
-});
-
-// 发送消息
-worker.postMessage({ type: 'execute', data: someData });
+  
+  // 保留现有代码...
+}
 ```
 
-#### 5.3.2 方案2：使用子进程
+## 5. 复用与扩展 Cline 现有组件
+
+### 5.1 复用 Cline 类为基础智能体
+
+将现有 `Cline` 类的核心功能抽象为基础智能体类：
 
 ```typescript
-// 使用子进程替代线程
-import { fork } from 'child_process';
-import * as path from 'path';
-
-// 创建子进程
-const childProcess = fork(
-  path.join(__dirname, 'coderAgentProcess.js'),
-  [],
-  { 
-    stdio: ['inherit', 'inherit', 'inherit', 'ipc'] 
+// 基于 Cline 类创建 BaseAgent
+export abstract class BaseAgent {
+  // 复用 Cline 类中的属性
+  protected taskId: string;
+  protected apiHandler: ApiHandler;
+  protected checkpointTracker: CheckpointTracker;
+  protected messages: ClineMessage[] = [];
+  
+  // 复用 Cline 的记忆和上下文管理
+  protected consecutiveMistakeCount = 0;
+  protected consecutiveAutoApprovedRequestsCount = 0;
+  
+  constructor(apiHandler: ApiHandler, checkpointTracker: CheckpointTracker) {
+    this.taskId = crypto.randomUUID();
+    this.apiHandler = apiHandler;
+    this.checkpointTracker = checkpointTracker;
   }
-);
-
-// 处理消息
-childProcess.on('message', (message) => {
-  // 处理来自子进程的消息
-});
-
-// 发送消息
-childProcess.send({ type: 'execute', data: someData });
+  
+  // 保留和抽象 Cline 类中的关键方法
+  abstract async processTask(task: AgentTask): Promise<TaskResult>;
+  
+  // 复用 Cline 类的 say 方法
+  async say(type: ClineSay, message: string, images?: string[], partial: boolean = false): Promise<void> {
+    // 复用现有实现...
+  }
+  
+  // 复用 Cline 类的 saveCheckpoint 方法
+  async saveCheckpoint(): Promise<void> {
+    // 复用现有实现...
+  }
+  
+  // 复用其他重要方法...
+}
 ```
 
-#### 5.3.3 方案3：使用消息队列的异步执行（推荐）
+### 5.2 复用 Webview 组件
+
+扩展现有的 Webview 组件以支持多智能体：
 
 ```typescript
-// 使用消息队列模拟并发
-class TaskQueue {
+// 扩展 ClineProvider 类
+export class AgentChatViewProvider extends ClineProvider {
+  // 保留现有属性和方法
+  
+  // 扩展方法以支持多智能体消息显示
+  sendAgentMessage(agentId: string, agentName: string, message: string): void {
+    // 使用现有的 postMessageToWebview 方法，但增加智能体标识
+    this.postMessageToWebview({
+      type: 'newAgentMessage',
+      agentId,
+      agentName,
+      message,
+      timestamp: Date.now()
+    });
+  }
+}
+```
+
+### 5.3 复用任务处理和事件系统
+
+复用 VSCode 的 API 和 Cline 现有的事件处理机制：
+
+```typescript
+// 复用 VSCode 事件 API
+const agentEventEmitter = new vscode.EventEmitter<AgentMessage>();
+export const agentCommunicationChannel = agentEventEmitter.event;
+
+// 复用 Cline 的异步处理模式
+class TaskProcessor {
   private queue: Array<() => Promise<any>> = [];
   private running = false;
   
+  // 复用现有的异步模式
   enqueue(task: () => Promise<any>): void {
     this.queue.push(task);
     if (!this.running) {
@@ -386,540 +302,286 @@ class TaskQueue {
   }
   
   private async processQueue(): Promise<void> {
-    if (this.queue.length === 0) {
-      this.running = false;
-      return;
-    }
-    
-    this.running = true;
-    const task = this.queue.shift()!;
-    
-    try {
-      await task();
-    } catch (error) {
-      console.error('Task error:', error);
-    }
-    
-    // 处理下一个任务
-    this.processQueue();
+    // 复用现有的队列处理逻辑...
   }
 }
 ```
 
-### 5.4 通信机制实现
+### 5.4 复用记忆和上下文管理
 
-智能体之间需要有可靠的通信机制：
-
-#### 5.4.1 方案1：事件总线
+充分利用 Cline 现有的记忆和上下文管理系统：
 
 ```typescript
-// 通过事件总线实现跨智能体通信
-export class EventBus {
-  private events = new Map<string, Array<(data: any) => void>>();
+// 扩展 AgentManager 以利用 Cline 的记忆和上下文管理
+export class AgentManager {
+  // 其他属性...
   
-  on(event: string, callback: (data: any) => void): void {
-    if (!this.events.has(event)) {
-      this.events.set(event, []);
-    }
-    this.events.get(event)!.push(callback);
-  }
+  // 复用 CheckpointTracker
+  private checkpointTracker: CheckpointTracker;
   
-  off(event: string, callback: (data: any) => void): void {
-    if (!this.events.has(event)) return;
+  initialize(context: vscode.ExtensionContext): void {
+    // 复用现有的检查点跟踪器初始化
+    this.checkpointTracker = new CheckpointTracker(context);
     
-    const callbacks = this.events.get(event)!;
-    const index = callbacks.indexOf(callback);
-    if (index !== -1) {
-      callbacks.splice(index, 1);
-    }
+    // 其他初始化...
   }
   
-  emit(event: string, data: any): void {
-    if (!this.events.has(event)) return;
-    
-    this.events.get(event)!.forEach(callback => {
-      try {
-        callback(data);
-      } catch (e) {
-        console.error(`Error in event handler for ${event}:`, e);
-      }
-    });
-  }
+  // 其他方法...
 }
 ```
 
-#### 5.4.2 方案2：使用VSCode的API进行通信（推荐）
+## 6. 技术可行性分析与解决方案
+
+### 6.1 VSCode窗口支持问题
+
+Cline 已有成熟的 Webview 实现，我们可以扩展它：
+
+#### 6.1.1 扩展现有 Webview
+
+- **方案**：扩展 Cline 现有的 Webview 实现，而不是创建新的 Webview
+- **优势**：
+  - 复用现有代码
+  - 保持用户界面一致性
+  - 减少开发工作量
+
+### 6.2 替代多窗口的UI方案
+
+#### 6.2.1 扩展单一聊天界面（推荐）
+
+扩展 Cline 现有的聊天界面，添加智能体标识：
 
 ```typescript
-// 使用VSCode API进行跨组件通信
-const channelEmitter = new vscode.EventEmitter<AgentMessage>();
-export const agentCommunicationChannel = channelEmitter.event;
+// 扩展消息数据结构，添加智能体标识
+interface ExtendedChatMessage extends ClineMessage {
+  agentId?: string;
+  agentName?: string;
+}
 
-// 发送消息
-channelEmitter.fire({
-  from: 'planner',
-  to: 'coder',
-  type: 'task',
-  payload: taskDetails
+// 修改发送消息到 Webview 的代码
+this.postMessageToWebview({
+  type: 'newMessage',
+  message: {
+    ...message,
+    agentId: agentId || 'planner',
+    agentName: agentName || '计划智能体'
+  }
 });
+```
 
-// 监听消息
-context.subscriptions.push(
-  agentCommunicationChannel(message => {
-    if (message.to === 'coder') {
-      // 处理发送给代码智能体的消息
+### 6.3 复用 Cline 的异步处理机制
+
+Cline 已经有成熟的异步处理机制，可以扩展为多任务队列：
+
+```typescript
+// 扩展现有的异步处理机制
+class MultiAgentTaskProcessor {
+  private queues: Map<string, TaskQueue> = new Map();
+  
+  // 获取或创建指定智能体的任务队列
+  getQueue(agentId: string): TaskQueue {
+    if (!this.queues.has(agentId)) {
+      this.queues.set(agentId, new TaskQueue());
     }
+    return this.queues.get(agentId)!;
+  }
+  
+  // 添加智能体任务
+  enqueueAgentTask(agentId: string, task: () => Promise<any>): void {
+    this.getQueue(agentId).enqueue(task);
+  }
+}
+
+// 复用现有的 TaskQueue 类
+class TaskQueue {
+  // 复用现有实现...
+}
+```
+
+### 6.4 通信机制实现
+
+复用 VSCode 的事件 API，与 Cline 现有机制集成：
+
+```typescript
+// 复用 VSCode 事件 API 进行智能体间通信
+const agentEventEmitter = new vscode.EventEmitter<AgentMessage>();
+
+// 集成到现有系统
+context.subscriptions.push(
+  agentEventEmitter.event(message => {
+    AgentManager.getInstance().handleAgentMessage(message);
   })
 );
 ```
 
-### 5.5 存储和状态管理
+### 6.5 复用 Cline 的状态管理
 
-多智能体系统需要管理状态和上下文：
+充分利用 Cline 现有的状态管理机制：
 
 ```typescript
-// 使用VSCode扩展全局状态存储
+// 复用 Cline 的状态管理
 export class AgentStateManager {
+  // 复用 vscode.ExtensionContext
   private context: vscode.ExtensionContext;
-  private memoryCache: Map<string, any> = new Map();
   
-  constructor(context: vscode.ExtensionContext) {
-    this.context = context;
-  }
-  
-  // 存储持久化数据
+  // 复用现有的状态存储方法
   async setPersistentState(key: string, value: any): Promise<void> {
     await this.context.globalState.update(key, value);
   }
   
-  // 获取持久化数据
-  getPersistentState<T>(key: string, defaultValue: T): T {
-    return this.context.globalState.get<T>(key) ?? defaultValue;
-  }
-  
-  // 存储内存数据
-  setMemoryState(key: string, value: any): void {
-    this.memoryCache.set(key, value);
-  }
-  
-  // 获取内存数据
-  getMemoryState<T>(key: string, defaultValue: T): T {
-    return this.memoryCache.get(key) ?? defaultValue;
-  }
+  // 其他方法...
 }
 ```
 
-### 5.6 技术方案总结
+### 6.6 技术方案总结
 
-综合以上分析，我们推荐以下最可行的实现方案：
+综合以上分析，我们的改造方案将：
 
-1. **使用单一Webview，实现类似聊天群组的UI**：
-   - 避免多窗口管理问题
-   - 提供更好的用户体验
-   - 简化通信逻辑
+1. **最大程度复用 Cline 现有组件**：
+   - 复用 UI 组件和界面逻辑
+   - 复用工具调用机制
+   - 复用异步处理和状态管理
 
-2. **使用Node.js的异步任务队列模拟并行处理**：
-   - 避免复杂的线程同步问题
-   - 符合JavaScript的异步编程模型
-   - 简化错误处理
+2. **扩展而非替换**：
+   - 扩展现有 API 而不是创建新的
+   - 保持与现有功能的兼容性
+   - 确保渐进式部署
 
-3. **使用VSCode API的事件系统进行通信**：
-   - 利用现有的事件机制
-   - 避免实现复杂的消息传递逻辑
-   - 便于扩展和维护
+3. **保持一致的用户体验**：
+   - 延续 Cline 现有的交互模式
+   - 在现有界面基础上添加多智能体支持
 
-这种方案既能满足多智能体协作的需求，又能规避VSCode环境的技术限制。
+## 7. 调整后的具体改造步骤
 
-## 6. 调整后的具体改造步骤
+### 7.1 扩展 Cline 类和创建智能体基类
 
-### 6.1 智能体基础框架
-
-创建一个基础智能体类，为计划智能体和代码智能体提供共同功能：
+基于 Cline 类创建智能体基类，保留关键功能：
 
 ```typescript
-// 智能体基类
+// 扩展 Cline 类，添加智能体支持
+export class ExtendedCline extends Cline {
+  // 添加智能体管理器
+  private agentManager: AgentManager;
+  
+  constructor(/* 保留现有参数 */) {
+    super(/* 传递现有参数 */);
+    this.agentManager = AgentManager.getInstance();
+  }
+  
+  // 扩展工具处理，添加智能体创建工具
+  async presentAssistantMessage() {
+    // 调用原始方法
+    await super.presentAssistantMessage();
+    
+    // 处理智能体相关消息
+    // ...
+  }
+}
+
+// 基于 Cline 功能创建基础智能体
 export abstract class BaseAgent {
-  protected id: string;
-  protected type: AgentType;
-  protected status: AgentStatus;
-  protected eventEmitter: vscode.EventEmitter<AgentMessage>;
-  
-  constructor(type: AgentType, eventEmitter: vscode.EventEmitter<AgentMessage>) {
-    this.id = crypto.randomUUID();
-    this.type = type;
-    this.status = AgentStatus.Idle;
-    this.eventEmitter = eventEmitter;
-  }
-  
-  abstract async processTask(task: AgentTask): Promise<TaskResult>;
-  
-  sendMessage(targetAgentId: string, message: AgentMessage): void {
-    message.from = this.id;
-    message.to = targetAgentId;
-    this.eventEmitter.fire(message);
-  }
-  
-  // 其他共同方法...
-}
-
-// 计划智能体
-export class PlannerAgent extends BaseAgent {
-  constructor(eventEmitter: vscode.EventEmitter<AgentMessage>) {
-    super(AgentType.Planner, eventEmitter);
-  }
-  
-  async processTask(task: AgentTask): Promise<TaskResult> {
-    // 实现计划智能体的任务处理逻辑
-    // 1. 分析用户需求
-    // 2. 制定计划
-    // 3. 决定是否需要创建代码智能体
-    // ...
-  }
-  
-  createCoderAgent(task: CoderTask): string {
-    // 请求创建一个代码智能体
-    return AgentManager.getInstance().createCoderAgent(task);
-  }
-}
-
-// 代码智能体
-export class CoderAgent extends BaseAgent {
-  private plannerAgentId: string;
-  private taskSpec: CoderTaskSpec;
-  
-  constructor(eventEmitter: vscode.EventEmitter<AgentMessage>, plannerAgentId: string, taskSpec: CoderTaskSpec) {
-    super(AgentType.Coder, eventEmitter);
-    this.plannerAgentId = plannerAgentId;
-    this.taskSpec = taskSpec;
-  }
-  
-  async processTask(task: AgentTask): Promise<TaskResult> {
-    // 实现代码智能体的任务处理逻辑
-    // 1. 根据规范编写代码
-    // 2. 测试代码
-    // 3. 完成后向计划智能体汇报
-    // ...
-  }
-  
-  reportToPlanner(result: TaskResult): void {
-    this.sendMessage(this.plannerAgentId, {
-      type: MessageType.TaskComplete,
-      payload: result
-    });
-  }
+  // 复用 Cline 核心功能
+  // ...
 }
 ```
 
-### 6.2 UI实现 - 聊天群组界面
+### 7.2 扩展 UI 组件
 
-实现统一的多智能体聊天界面：
+扩展 Cline 现有的 UI 组件以支持多智能体：
 
 ```typescript
-// 聊天界面提供者
-export class AgentChatViewProvider implements vscode.WebviewViewProvider {
-  public static readonly viewType = 'cline.agentChatView';
-  private _view?: vscode.WebviewView;
+// 扩展 ClineProvider 类
+export class ExtendedClineProvider extends ClineProvider {
+  // 保留现有功能
   
-  constructor(private readonly context: vscode.ExtensionContext) {}
-  
-  resolveWebviewView(
-    webviewView: vscode.WebviewView,
-    context: vscode.WebviewViewResolveContext,
-    token: vscode.CancellationToken
-  ): void {
-    this._view = webviewView;
-    
-    webviewView.webview.options = {
-      enableScripts: true,
-      localResourceRoots: [
-        vscode.Uri.joinPath(this.context.extensionUri, 'media'),
-        vscode.Uri.joinPath(this.context.extensionUri, 'webview-ui/dist')
-      ]
-    };
-    
-    // 设置HTML内容
-    webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
-    
-    // 设置消息处理
-    webviewView.webview.onDidReceiveMessage(message => {
-      // 处理来自Webview的消息
-      if (message.type === 'userMessage') {
-        // 处理用户消息
-        AgentManager.getInstance().handleUserMessage(message.content);
-      }
-    });
-  }
-  
-  // 发送消息到Webview
-  sendMessageToWebview(message: ChatMessage): void {
-    if (this._view) {
-      this._view.webview.postMessage({
-        type: 'newAgentMessage',
-        message
-      });
-    }
-  }
-  
-  private _getHtmlForWebview(webview: vscode.Webview): string {
-    // 生成Webview HTML内容
-    // ...实现聊天群组UI
-  }
+  // 添加多智能体支持
+  // ...
 }
 ```
 
-### 6.3 异步任务处理
+### 7.3 实现智能体管理器
 
-实现异步任务处理系统，避免阻塞主线程：
-
-```typescript
-// 任务处理器
-export class TaskProcessor {
-  private taskQueue: TaskQueue = new TaskQueue();
-  
-  // 添加计划智能体任务
-  enqueuePlannerTask(task: AgentTask): void {
-    this.taskQueue.enqueue(async () => {
-      const plannerAgent = AgentManager.getInstance().getPlannerAgent();
-      await plannerAgent.processTask(task);
-    });
-  }
-  
-  // 添加代码智能体任务
-  enqueueCoderTask(agentId: string, task: AgentTask): void {
-    this.taskQueue.enqueue(async () => {
-      const coderAgent = AgentManager.getInstance().getCoderAgent(agentId);
-      if (coderAgent) {
-        await coderAgent.processTask(task);
-      }
-    });
-  }
-}
-
-// 任务队列
-class TaskQueue {
-  private queue: Array<() => Promise<any>> = [];
-  private running = false;
-  
-  enqueue(task: () => Promise<any>): void {
-    this.queue.push(task);
-    if (!this.running) {
-      this.processQueue();
-    }
-  }
-  
-  private async processQueue(): Promise<void> {
-    if (this.queue.length === 0) {
-      this.running = false;
-      return;
-    }
-    
-    this.running = true;
-    const task = this.queue.shift()!;
-    
-    try {
-      await task();
-    } catch (error) {
-      console.error('Task error:', error);
-    }
-    
-    // 处理下一个任务
-    this.processQueue();
-  }
-}
-```
-
-### 6.4 智能体管理器
-
-实现智能体管理器，采用单例模式：
+创建智能体管理器，集成到 Cline 现有系统：
 
 ```typescript
-// 智能体管理器
+// 创建智能体管理器
 export class AgentManager {
   private static instance: AgentManager;
   private agents: Map<string, BaseAgent> = new Map();
-  private eventEmitter: vscode.EventEmitter<AgentMessage> = new vscode.EventEmitter<AgentMessage>();
-  private chatViewProvider?: AgentChatViewProvider;
-  private taskProcessor: TaskProcessor = new TaskProcessor();
   
-  private constructor() {
-    // 监听智能体消息
-    this.eventEmitter.event(message => {
-      this.handleAgentMessage(message);
-    });
-  }
-  
-  static getInstance(): AgentManager {
-    if (!AgentManager.instance) {
-      AgentManager.instance = new AgentManager();
-    }
-    return AgentManager.instance;
-  }
-  
-  initialize(context: vscode.ExtensionContext): void {
-    // 创建聊天视图提供者
-    this.chatViewProvider = new AgentChatViewProvider(context);
+  // 集成到 Cline 的激活函数
+  static initializeInExtension(context: vscode.ExtensionContext): void {
+    const instance = AgentManager.getInstance();
+    instance.initialize(context);
     
-    // 注册Webview视图提供者
-    context.subscriptions.push(
-      vscode.window.registerWebviewViewProvider(
-        AgentChatViewProvider.viewType,
-        this.chatViewProvider
-      )
-    );
-    
-    // 创建默认的计划智能体
-    this.createPlannerAgent();
+    // 集成到现有功能
+    // ...
   }
   
-  createPlannerAgent(): string {
-    const plannerAgent = new PlannerAgent(this.eventEmitter);
-    const agentId = plannerAgent.getId();
-    this.agents.set(agentId, plannerAgent);
-    return agentId;
-  }
-  
-  createCoderAgent(task: CoderTask): string {
-    // 创建代码智能体
-    const coderAgent = new CoderAgent(
-      this.eventEmitter, 
-      task.plannerAgentId, 
-      task.taskSpec
-    );
-    const agentId = coderAgent.getId();
-    this.agents.set(agentId, coderAgent);
-    
-    return agentId;
-  }
-  
-  getPlannerAgent(): PlannerAgent {
-    // 获取默认的计划智能体
-    for (const [id, agent] of this.agents.entries()) {
-      if (agent instanceof PlannerAgent) {
-        return agent as PlannerAgent;
-      }
-    }
-    
-    // 如果没有创建一个新的
-    const agentId = this.createPlannerAgent();
-    return this.agents.get(agentId) as PlannerAgent;
-  }
-  
-  getCoderAgent(agentId: string): CoderAgent | undefined {
-    const agent = this.agents.get(agentId);
-    if (agent instanceof CoderAgent) {
-      return agent as CoderAgent;
-    }
-    return undefined;
-  }
-  
-  // 处理用户消息
-  handleUserMessage(content: string): void {
-    // 将用户消息发送到聊天界面
-    this.chatViewProvider?.sendMessageToWebview({
-      agentId: 'user',
-      agentName: 'User',
-      agentType: AgentType.User,
-      content,
-      timestamp: Date.now(),
-      isUser: true
-    });
-    
-    // 创建任务并分配给计划智能体
-    const task: AgentTask = {
-      id: crypto.randomUUID(),
-      type: TaskType.UserRequest,
-      content,
-      timestamp: Date.now()
-    };
-    
-    this.taskProcessor.enqueuePlannerTask(task);
-  }
-  
-  // 处理智能体消息
-  private handleAgentMessage(message: AgentMessage): void {
-    // 转发消息到目标智能体
-    const targetAgent = this.agents.get(message.to);
-    if (targetAgent) {
-      // 处理消息...
-      
-      // 如果是任务完成消息，更新UI
-      if (message.type === MessageType.TaskComplete) {
-        const sourceAgent = this.agents.get(message.from);
-        if (sourceAgent && this.chatViewProvider) {
-          this.chatViewProvider.sendMessageToWebview({
-            agentId: sourceAgent.getId(),
-            agentName: sourceAgent.getDisplayName(),
-            agentType: sourceAgent.getType(),
-            content: message.payload.result,
-            timestamp: Date.now(),
-            isUser: false
-          });
-        }
-      }
-    }
-  }
+  // 其他方法...
 }
 ```
 
-## 7. 工作流程
+## 8. 工作流程
 
-### 7.1 基本工作流程
+### 8.1 基本工作流程
 
-1. 用户向计划智能体提出需求
-2. 计划智能体分析需求并制定解决方案
+1. 用户向计划智能体提出需求（通过现有 Cline 界面）
+2. 计划智能体（扩展的 Cline 实例）分析需求并制定解决方案
 3. 计划智能体决定是否需要创建代码智能体：
-   - 如果需要，创建代码智能体，并提供目标和思路
-   - 如果不需要，直接完成任务并向用户汇报
-4. 代码智能体在独立任务队列中，根据规范编写代码
+   - 如果需要，使用新增的 create_coder_agent 工具
+   - 如果不需要，直接使用现有功能完成任务
+4. 代码智能体在独立任务队列中工作
 5. 代码智能体完成任务后向计划智能体汇报
-6. 计划智能体综合结果，向用户提供最终答案
+6. 计划智能体综合结果，使用现有的界面向用户汇报
 
-### 7.2 通信流程
+### 8.2 通信流程
 
 ```
-     用户
-      ↕
- 统一聊天界面
-      ↕
-    事件系统
-   ↙        ↘
-计划智能体 ←→ 代码智能体
-(任务队列1)  (任务队列2)
+            用户
+              ↕
+     Cline 现有聊天界面
+     (带智能体标识扩展)
+              ↕
+          事件系统
+     ↙              ↘
+计划智能体          代码智能体
+(Cline实例扩展)    (Cline实例扩展) 
+(主任务队列)        (独立任务队列)
 ```
 
-## 8. 后续扩展路径
+## 9. 后续扩展路径
 
-这种简化的双智能体系统为未来扩展提供了基础，可以逐步增加更多类型的智能体：
+这种基于 Cline 现有功能的双智能体系统为未来扩展提供了基础：
 
 1. **测试智能体**：专注于生成测试用例和执行测试
 2. **调试智能体**：专注于调试代码和修复问题
 3. **架构智能体**：专注于系统架构设计和优化
 4. **文档智能体**：专注于生成代码文档和注释
 
-## 9. 优势和收益
+## 10. 优势和收益
 
 这种改造方案有以下优势：
 
-1. **逐步实现**：从简单的双智能体系统开始，易于实现和测试
-2. **职责分离**：计划智能体专注于高层任务，代码智能体专注于具体实现
-3. **并行处理**：异步任务队列支持让用户在等待代码生成时可以继续与计划智能体交互
-4. **专门化提示**：可以为不同类型的智能体优化不同的提示词，提高各自性能
-5. **技术可行性**：解决了VSCode插件开发中的各种技术限制问题
-6. **统一界面**：提供了一个聊天群组式的界面，改善用户体验
+1. **最小化变更**：基于现有代码进行扩展，降低风险
+2. **复用现有资产**：充分利用 Cline 现有组件和功能
+3. **保持一致性**：用户体验与现有系统保持一致
+4. **渐进式实现**：可以逐步添加多智能体功能
+5. **技术可行性高**：避免了重新开发的复杂性
+6. **维护成本低**：与现有代码库保持一致性，便于维护
 
-## 10. 简化版实现路径
+## 11. 简化版实现路径
 
-1. 第一阶段：实现基础的双智能体架构
-   - 创建智能体基类和两种具体智能体
-   - 实现统一的聊天界面
-   - 实现基于VSCode事件系统的通信机制
+1. 第一阶段：扩展现有系统支持多智能体
+   - 扩展 Cline 类以支持多智能体
+   - 添加智能体管理器
+   - 实现create_coder_agent工具
 
-2. 第二阶段：增强异步任务处理和状态管理
-   - 完善任务队列和调度系统
+2. 第二阶段：增强智能体交互
+   - 扩展UI显示智能体标识
+   - 完善智能体间通信
    - 增强状态同步和错误处理
-   - 优化用户界面，提供更好的交互体验
 
-3. 第三阶段：增加更多智能体类型和功能
+3. 第三阶段：增加更多智能体类型
    - 逐步添加其他类型的专门化智能体
-   - 实现更复杂的协作流程
+   - 增强智能体协作能力
    - 优化资源使用和性能 
