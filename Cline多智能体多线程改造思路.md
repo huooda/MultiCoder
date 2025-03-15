@@ -46,20 +46,195 @@ src/
       └── AgentUIManager.ts      // 界面管理器
 ```
 
-## 4. 技术可行性分析与解决方案
+## 4. 提示词设计与工具调用模式
 
-### 4.1 VSCode窗口支持问题
+Cline 使用工具调用系统允许智能体与外部系统交互。我们将按照类似的模式，实现计划智能体创建代码智能体的功能。
+
+### 4.1 工具调用定义
+
+在 Cline 的工具调用系统中，我们需要添加一个新的工具：
+
+```typescript
+// 在现有的 toolUseNames 中添加
+export const toolUseNames = [
+  // 现有工具...
+  "execute_command",
+  "read_file",
+  "write_to_file",
+  // 新增工具
+  "create_coder_agent",
+] as const
+```
+
+### 4.2 工具参数定义
+
+为"创建代码智能体"工具添加参数：
+
+```typescript
+// 在现有的 toolParamNames 中添加
+export const toolParamNames = [
+  // 现有参数...
+  "command",
+  "path",
+  // 新增参数
+  "task_description",
+  "code_style",
+  "requirements",
+] as const
+```
+
+### 4.3 系统提示词设计
+
+修改系统提示词，添加创建代码智能体的工具描述：
+
+```typescript
+// 在 SYSTEM_PROMPT 中添加新工具描述
+`
+## create_coder_agent
+Description: Create a new Coder Agent to work on a specific coding task. The Coder Agent will work in parallel while you continue planning and coordinating. Use this tool when a task involves complex code implementation that would benefit from dedicated focus.
+Parameters:
+- task_description: (required) A detailed description of the task for the Coder Agent to work on, including specific goals, expected functionality, and any constraints.
+- code_style: (required) Style guidelines for the code to be produced, such as formatting, naming conventions, and design patterns to follow.
+- requirements: (required) Technical requirements for the task, such as programming language, frameworks, libraries to use, and performance considerations.
+Usage:
+<create_coder_agent>
+<task_description>Detailed task description here</task_description>
+<code_style>Code style guidelines here</code_style>
+<requirements>Technical requirements here</requirements>
+</create_coder_agent>
+`
+```
+
+### 4.4 计划智能体提示词
+
+计划智能体的提示词应该包含关于何时以及如何使用代码智能体的指导：
+
+```
+你是计划智能体，负责理解用户需求、制定解决方案并协调代码智能体的工作。
+
+## 工作流程：
+1. 分析用户请求和要求
+2. 制定解决方案的高级计划
+3. 评估任务复杂性，决定是否需要创建代码智能体：
+   - 对于复杂或大型代码任务，创建代码智能体
+   - 对于简单任务或非编码任务，直接自己处理
+4. 如果决定创建代码智能体，使用 create_coder_agent 工具，并提供:
+   - 详细的任务描述
+   - 代码风格指南
+   - 技术要求
+5. 继续与用户交互，同时监控代码智能体的进度
+6. 收到代码智能体的成果后，进行审查并向用户报告
+
+## 指导原则：
+- 优先为大型代码实现或需要专注开发的任务创建代码智能体
+- 提供给代码智能体明确的目标和约束
+- 保持对整体解决方案的掌控
+- 适时地向用户报告进度和结果
+```
+
+### 4.5 代码智能体提示词
+
+代码智能体的提示词应该更专注于代码实现：
+
+```
+你是代码智能体，专注于高质量代码的实现。你由计划智能体创建，并基于特定任务进行工作。
+
+## 工作流程：
+1. 分析从计划智能体收到的任务描述、代码风格和技术要求
+2. 规划代码实现的具体步骤
+3. 实现所需代码，确保符合要求和最佳实践
+4. 测试和优化你的实现
+5. 完成后，向计划智能体报告结果
+
+## 指导原则：
+- 专注于代码质量和效率
+- 严格遵循提供的代码风格指南
+- 提供详细的注释和文档
+- 考虑边缘情况和错误处理
+- 在复杂决策点主动请求计划智能体的指导
+```
+
+### 4.6 创建代码智能体的实现逻辑
+
+在 `Cline` 类中，我们需要添加处理 `create_coder_agent` 工具调用的逻辑：
+
+```typescript
+// Cline 类中添加的方法
+async handleCreateCoderAgentTool(block: ToolUse, pushToolResult: (result: any) => void) {
+  try {
+    const { task_description, code_style, requirements } = block.params;
+    
+    // 验证必要参数
+    if (!task_description) {
+      this.consecutiveMistakeCount++;
+      pushToolResult(await this.sayAndCreateMissingParamError("create_coder_agent", "task_description"));
+      return;
+    }
+    
+    if (!code_style) {
+      this.consecutiveMistakeCount++;
+      pushToolResult(await this.sayAndCreateMissingParamError("create_coder_agent", "code_style"));
+      return;
+    }
+    
+    if (!requirements) {
+      this.consecutiveMistakeCount++;
+      pushToolResult(await this.sayAndCreateMissingParamError("create_coder_agent", "requirements"));
+      return;
+    }
+    
+    // 重置错误计数
+    this.consecutiveMistakeCount = 0;
+    
+    // 创建代码智能体的请求数据
+    const coderAgentRequest = {
+      taskDescription: task_description,
+      codeStyle: code_style,
+      requirements: requirements
+    };
+    
+    // 创建代码智能体
+    const coderAgentId = await AgentManager.getInstance().createCoderAgent({
+      plannerAgentId: this.taskId,
+      taskSpec: coderAgentRequest
+    });
+    
+    // 向用户显示通知
+    await this.say(
+      "text",
+      `已创建代码智能体来处理任务："${task_description.substring(0, 50)}${
+        task_description.length > 50 ? "..." : ""
+      }"`
+    );
+    
+    // 返回工具执行结果
+    pushToolResult(
+      formatResponse.toolResult(
+        `代码智能体已创建，ID: ${coderAgentId.substring(0, 8)}。该智能体将在独立任务队列中工作，完成后会向你报告结果。`
+      )
+    );
+    
+    await this.saveCheckpoint();
+  } catch (error) {
+    await this.handleError("创建代码智能体", error);
+  }
+}
+```
+
+## 5. 技术可行性分析与解决方案
+
+### 5.1 VSCode窗口支持问题
 
 VSCode对插件提供了多种UI表现形式，但存在一些限制：
 
-#### 4.1.1 Webview面板
+#### 5.1.1 Webview面板
 
 - **支持情况**：VSCode支持插件创建多个Webview面板（Panel）或Webview视图（View）
 - **限制**：
   - 同类型的视图在同一时间通常只能显示一个实例
   - 打开太多面板会使界面拥挤，影响用户体验
 
-#### 4.1.2 推荐实现方案
+#### 5.1.2 推荐实现方案
 
 ```typescript
 // 创建新的Webview面板
@@ -80,9 +255,9 @@ export function createAgentPanel(context: vscode.ExtensionContext, agentId: stri
 }
 ```
 
-### 4.2 替代多窗口的UI方案
+### 5.2 替代多窗口的UI方案
 
-#### 4.2.1 方案1：对话聊天群组模式（推荐）
+#### 5.2.1 方案1：对话聊天群组模式（推荐）
 
 可以采用类似微信群聊的界面，同时显示多个智能体的对话：
 
@@ -110,13 +285,13 @@ function sendMessageToWebview(webview: vscode.Webview, message: ChatMessage): vo
 }
 ```
 
-#### 4.2.2 方案2：选项卡式界面
+#### 5.2.2 方案2：选项卡式界面
 
 - **实现方式**：在单一Webview中实现选项卡切换不同智能体的对话
 - **优势**：界面整洁，易于管理多个智能体
 - **技术实现**：使用CSS和JavaScript在Webview内部实现选项卡切换
 
-#### 4.2.3 方案3：侧边栏视图组合
+#### 5.2.3 方案3：侧边栏视图组合
 
 - **实现方式**：利用VSCode的侧边栏视图组合多个智能体界面
 - **优势**：符合VSCode原生UI风格，用户熟悉
@@ -139,11 +314,11 @@ context.subscriptions.push(
 );
 ```
 
-### 4.3 多线程支持问题
+### 5.3 多线程支持问题
 
 VSCode插件环境中的多线程/多进程支持有限：
 
-#### 4.3.1 方案1：使用Node.js的Worker Threads
+#### 5.3.1 方案1：使用Node.js的Worker Threads
 
 ```typescript
 // 在VSCode扩展中使用Worker Threads
@@ -170,7 +345,7 @@ worker.on('message', (message) => {
 worker.postMessage({ type: 'execute', data: someData });
 ```
 
-#### 4.3.2 方案2：使用子进程
+#### 5.3.2 方案2：使用子进程
 
 ```typescript
 // 使用子进程替代线程
@@ -195,7 +370,7 @@ childProcess.on('message', (message) => {
 childProcess.send({ type: 'execute', data: someData });
 ```
 
-#### 4.3.3 方案3：使用消息队列的异步执行（推荐）
+#### 5.3.3 方案3：使用消息队列的异步执行（推荐）
 
 ```typescript
 // 使用消息队列模拟并发
@@ -231,11 +406,11 @@ class TaskQueue {
 }
 ```
 
-### 4.4 通信机制实现
+### 5.4 通信机制实现
 
 智能体之间需要有可靠的通信机制：
 
-#### 4.4.1 方案1：事件总线
+#### 5.4.1 方案1：事件总线
 
 ```typescript
 // 通过事件总线实现跨智能体通信
@@ -273,7 +448,7 @@ export class EventBus {
 }
 ```
 
-#### 4.4.2 方案2：使用VSCode的API进行通信（推荐）
+#### 5.4.2 方案2：使用VSCode的API进行通信（推荐）
 
 ```typescript
 // 使用VSCode API进行跨组件通信
@@ -298,7 +473,7 @@ context.subscriptions.push(
 );
 ```
 
-### 4.5 存储和状态管理
+### 5.5 存储和状态管理
 
 多智能体系统需要管理状态和上下文：
 
@@ -334,7 +509,7 @@ export class AgentStateManager {
 }
 ```
 
-### 4.6 技术方案总结
+### 5.6 技术方案总结
 
 综合以上分析，我们推荐以下最可行的实现方案：
 
@@ -355,9 +530,9 @@ export class AgentStateManager {
 
 这种方案既能满足多智能体协作的需求，又能规避VSCode环境的技术限制。
 
-## 5. 调整后的具体改造步骤
+## 6. 调整后的具体改造步骤
 
-### 5.1 智能体基础框架
+### 6.1 智能体基础框架
 
 创建一个基础智能体类，为计划智能体和代码智能体提供共同功能：
 
@@ -435,7 +610,7 @@ export class CoderAgent extends BaseAgent {
 }
 ```
 
-### 5.2 UI实现 - 聊天群组界面
+### 6.2 UI实现 - 聊天群组界面
 
 实现统一的多智能体聊天界面：
 
@@ -492,7 +667,7 @@ export class AgentChatViewProvider implements vscode.WebviewViewProvider {
 }
 ```
 
-### 5.3 异步任务处理
+### 6.3 异步任务处理
 
 实现异步任务处理系统，避免阻塞主线程：
 
@@ -553,7 +728,7 @@ class TaskQueue {
 }
 ```
 
-### 5.4 智能体管理器
+### 6.4 智能体管理器
 
 实现智能体管理器，采用单例模式：
 
@@ -686,9 +861,9 @@ export class AgentManager {
 }
 ```
 
-## 6. 工作流程
+## 7. 工作流程
 
-### 6.1 基本工作流程
+### 7.1 基本工作流程
 
 1. 用户向计划智能体提出需求
 2. 计划智能体分析需求并制定解决方案
@@ -699,7 +874,7 @@ export class AgentManager {
 5. 代码智能体完成任务后向计划智能体汇报
 6. 计划智能体综合结果，向用户提供最终答案
 
-### 6.2 通信流程
+### 7.2 通信流程
 
 ```
      用户
@@ -712,7 +887,7 @@ export class AgentManager {
 (任务队列1)  (任务队列2)
 ```
 
-## 7. 后续扩展路径
+## 8. 后续扩展路径
 
 这种简化的双智能体系统为未来扩展提供了基础，可以逐步增加更多类型的智能体：
 
@@ -721,7 +896,7 @@ export class AgentManager {
 3. **架构智能体**：专注于系统架构设计和优化
 4. **文档智能体**：专注于生成代码文档和注释
 
-## 8. 优势和收益
+## 9. 优势和收益
 
 这种改造方案有以下优势：
 
@@ -732,7 +907,7 @@ export class AgentManager {
 5. **技术可行性**：解决了VSCode插件开发中的各种技术限制问题
 6. **统一界面**：提供了一个聊天群组式的界面，改善用户体验
 
-## 9. 简化版实现路径
+## 10. 简化版实现路径
 
 1. 第一阶段：实现基础的双智能体架构
    - 创建智能体基类和两种具体智能体
