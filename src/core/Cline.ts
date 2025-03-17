@@ -56,7 +56,7 @@ import { constructNewFileContent } from "./assistant-message/diff"
 import { ClineIgnoreController, LOCK_TEXT_SYMBOL } from "./ignore/ClineIgnoreController"
 import { parseMentions } from "./mentions"
 import { formatResponse } from "./prompts/responses"
-import { addUserInstructions, SYSTEM_PROMPT } from "./prompts/system"
+import { PLANNER_AGENT_PROMPT, addUserInstructions } from "./prompts/planner_agent"
 import { getNextTruncationRange, getTruncatedMessages } from "./sliding-window"
 import { OpenAiHandler } from "../api/providers/openai"
 import { ApiStream } from "../api/transform/stream"
@@ -65,6 +65,21 @@ import { ClineProvider, GlobalFileNames } from "./webview/ClineProvider"
 import { DEFAULT_LANGUAGE_SETTINGS, getLanguageKey, LanguageDisplay, LanguageKey } from "../shared/Languages"
 import { telemetryService } from "../services/telemetry/TelemetryService"
 import pTimeout from "p-timeout"
+
+// 添加removeClosingTag函数的定义
+/**
+ * 移除参数值中的闭合标签
+ * @param paramName 参数名称
+ * @param value 参数值
+ * @returns 处理后的参数值
+ */
+function removeClosingTag(paramName: string, value?: string): string {
+    if (!value) return ""
+    
+    // 移除可能的XML闭合标签
+    const closingTagRegex = new RegExp(`</${paramName}>$`)
+    return value.replace(closingTagRegex, "")
+}
 
 const cwd = vscode.workspace.workspaceFolders?.map((folder) => folder.uri.fsPath).at(0) ?? path.join(os.homedir(), "Desktop") // may or may not exist but fs checking existence would immediately ask for permission which would be bad UX, need to come up with a better solution
 
@@ -1267,22 +1282,10 @@ export class Cline {
 	}
 
 	async *attemptApiRequest(previousApiReqIndex: number): ApiStream {
-		// Wait for MCP servers to be connected before generating system prompt
-		await pWaitFor(() => this.providerRef.deref()?.mcpHub?.isConnecting !== true, { timeout: 10_000 }).catch(() => {
-			console.error("MCP servers failed to connect in time")
-		})
+		const cwd = await this.ensureTaskDirectoryExists()
 
-		const mcpHub = this.providerRef.deref()?.mcpHub
-		if (!mcpHub) {
-			throw new Error("MCP hub not available")
-		}
-
-		const disableBrowserTool = vscode.workspace.getConfiguration("cline").get<boolean>("disableBrowserTool") ?? false
-		const modelSupportsComputerUse = this.api.getModel().info.supportsComputerUse ?? false
-
-		const supportsComputerUse = modelSupportsComputerUse && !disableBrowserTool // only enable computer use if the model supports it and the user hasn't disabled it
-
-		let systemPrompt = await SYSTEM_PROMPT(cwd, supportsComputerUse, mcpHub, this.browserSettings)
+		// 使用计划智能体提示词
+		let systemPrompt = await PLANNER_AGENT_PROMPT(cwd, this.browserSettings)
 
 		let settingsCustomInstructions = this.customInstructions?.trim()
 		const preferredLanguage = getLanguageKey(
@@ -1337,13 +1340,17 @@ export class Cline {
 			clineIgnoreInstructions ||
 			preferredLanguageInstructions
 		) {
-			// altering the system prompt mid-task will break the prompt cache, but in the grand scheme this will not change often so it's better to not pollute user messages with it the way we have to with <potentially relevant details>
-			systemPrompt += addUserInstructions(
-				settingsCustomInstructions,
+			// 使用新的方式调用addUserInstructions
+			const allCustomInstructions = addUserInstructions(
+				settingsCustomInstructions || '',
 				clineRulesFileInstructions,
 				clineIgnoreInstructions,
 				preferredLanguageInstructions,
 			)
+			
+			if (allCustomInstructions) {
+				systemPrompt = addUserInstructions(systemPrompt, allCustomInstructions)
+			}
 		}
 
 		// If the previous API request's total token usage is close to the context window, truncate the conversation history to free up space for the new request
@@ -1548,6 +1555,10 @@ export class Cline {
 							return `[${block.name}]`
 						case "attempt_completion":
 							return `[${block.name}]`
+						case "create_coder_agent":
+							return `[${block.name} for '${block.params.task_description?.substring(0, 30)}${
+								block.params.task_description && block.params.task_description.length > 30 ? "..." : ""
+							}']`
 					}
 				}
 
@@ -1648,39 +1659,116 @@ export class Cline {
 						console.log("Ignoring error since task was abandoned (i.e. from task cancellation after resetting)")
 						return
 					}
-					const errorString = `Error ${action}: ${JSON.stringify(serializeError(error))}`
-					await this.say(
-						"error",
-						`Error ${action}:\n${error.message ?? JSON.stringify(serializeError(error), null, 2)}`,
-					)
-					// this.toolResults.push({
-					// 	type: "tool_result",
-					// 	tool_use_id: toolUseId,
-					// 	content: await this.formatToolError(errorString),
-					// })
-					pushToolResult(formatResponse.toolError(errorString))
+
+					console.error(`Error in ${action}:`, error)
+					await this.say("error", `Error in ${action}: ${error.message}`)
+					pushToolResult(formatResponse.toolError(error.message))
 				}
 
-				// If block is partial, remove partial closing tag so its not presented to user
-				const removeClosingTag = (tag: ToolParamName, text?: string) => {
-					if (!block.partial) {
-						return text || ""
+				// 处理create_coder_agent工具
+				if (block.name === "create_coder_agent") {
+					try {
+						const { task_description, code_style, requirements } = block.params
+						
+						// 验证必要参数
+						if (!task_description) {
+							this.consecutiveMistakeCount++
+							pushToolResult(await this.sayAndCreateMissingParamError("create_coder_agent", "task_description"))
+							break
+						}
+						
+						if (!code_style) {
+							this.consecutiveMistakeCount++
+							pushToolResult(await this.sayAndCreateMissingParamError("create_coder_agent", "code_style"))
+							break
+						}
+						
+						if (!requirements) {
+							this.consecutiveMistakeCount++
+							pushToolResult(await this.sayAndCreateMissingParamError("create_coder_agent", "requirements"))
+							break
+						}
+						
+						// 重置错误计数
+						this.consecutiveMistakeCount = 0
+						
+						// 询问用户是否批准创建代码智能体
+						const approvalMessage = `是否允许创建代码智能体来处理任务: "${task_description.substring(0, 50)}${
+							task_description.length > 50 ? "..." : ""
+						}"?`
+						
+						showNotificationForApprovalIfAutoApprovalEnabled(approvalMessage)
+						
+						// 如果自动批准设置已启用，并且未达到最大自动批准请求数
+						let approved = false
+						if (
+							this.autoApprovalSettings.enabled &&
+							this.consecutiveAutoApprovedRequestsCount < this.autoApprovalSettings.maxRequests
+						) {
+							approved = true
+							this.consecutiveAutoApprovedRequestsCount++
+							await this.say("text", `自动批准创建代码智能体 (${this.consecutiveAutoApprovedRequestsCount}/${this.autoApprovalSettings.maxRequests})`)
+						} else {
+							// 重置自动批准计数
+							this.consecutiveAutoApprovedRequestsCount = 0
+							
+							// 请求用户批准
+							approved = await askApproval("command", approvalMessage)
+							if (!approved) {
+								break
+							}
+						}
+						
+						// 如果获得批准，创建代码智能体
+						if (approved) {
+							try {
+								// 导入AgentManager
+								const { AgentManager } = await import("../agents/AgentManager")
+								const agentManager = AgentManager.getInstance()
+								
+								// 创建代码智能体
+								const coderAgentId = await agentManager.createCoderAgent({
+									plannerAgentId: this.taskId,
+									taskSpec: {
+										taskDescription: task_description,
+										codeStyle: code_style,
+										requirements: requirements
+									}
+								})
+								
+								// 向用户显示通知
+								await this.say(
+									"text",
+									`已创建代码智能体来处理任务："${task_description.substring(0, 50)}${
+										task_description.length > 50 ? "..." : ""
+									}"`
+								)
+								
+								// 返回工具执行结果
+								pushToolResult(
+									formatResponse.toolResult(
+										`代码智能体已创建，ID: ${coderAgentId.substring(0, 8)}。该智能体将在独立任务队列中工作，完成后会向你报告结果。`
+									)
+								)
+								
+								// 保存检查点
+								await this.saveCheckpoint()
+							} catch (error) {
+								// 处理AgentManager相关错误
+								pushToolResult(
+									formatResponse.toolError(
+										`创建代码智能体失败: ${error instanceof Error ? error.message : String(error)}`
+									)
+								)
+							}
+						}
+					} catch (error) {
+						await handleError("创建代码智能体", error instanceof Error ? error : new Error(String(error)))
 					}
-					if (!text) {
-						return ""
-					}
-					// This regex dynamically constructs a pattern to match the closing tag:
-					// - Optionally matches whitespace before the tag
-					// - Matches '<' or '</' optionally followed by any subset of characters from the tag name
-					const tagRegex = new RegExp(
-						`\\s?<\/?${tag
-							.split("")
-							.map((char) => `(?:${char})?`)
-							.join("")}$`,
-						"g",
-					)
-					return text.replace(tagRegex, "")
+					break
 				}
+
+				// ... existing code ...
 
 				if (block.name !== "browser_action") {
 					await this.browserSession.closeBrowser()
@@ -3625,7 +3713,7 @@ export class Cline {
 			details +=
 				"\nIn this mode you should focus on information gathering, asking questions, and architecting a solution. Once you have a plan, use the plan_mode_response tool to engage in a conversational back and forth with the user. Do not use the plan_mode_response tool until you've gathered all the information you need e.g. with read_file or ask_followup_question."
 			details +=
-				'\n(Remember: If it seems the user wants you to use tools only available in Act Mode, you should ask the user to "toggle to Act mode" (use those words) - they will have to manually do this themselves with the Plan/Act toggle button below. You do not have the ability to switch to Act Mode yourself, and must wait for the user to do it themselves once they are satisfied with the plan. You also cannot present an option to toggle to Act mode, as this will be something you need to direct the user to do manually themselves.)'
+				"\n(Remember: If it seems the user wants you to use tools only available in Act Mode, you should ask the user to \"toggle to Act mode\" (use those words) - they will have to manually do this themselves with the Plan/Act toggle button below. You do not have the ability to switch to Act Mode yourself, and must wait for the user to do it themselves once they are satisfied with the plan. You also cannot present an option to toggle to Act mode, as this will be something you need to direct the user to do manually themselves.)"
 		} else {
 			details += "\nACT MODE"
 		}
