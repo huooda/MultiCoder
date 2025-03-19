@@ -36,6 +36,9 @@ export class AgentManager {
   // 当前工作目录
   private cwd: string = ""
   
+  // 初始化状态
+  public isInitialized: boolean = false
+  
   private constructor() {
     // 私有构造函数，确保单例模式
     
@@ -76,6 +79,7 @@ export class AgentManager {
       .then(tracker => {
         this.checkpointTracker = tracker
         console.log('[AgentManager] 检查点跟踪器初始化完成')
+        this.isInitialized = true
       })
       .catch(error => {
         console.error('[AgentManager] 检查点跟踪器初始化失败:', error)

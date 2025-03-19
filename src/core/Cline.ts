@@ -21,7 +21,7 @@ import { UrlContentFetcher } from "../services/browser/UrlContentFetcher"
 import { listFiles } from "../services/glob/list-files"
 import { regexSearchFiles } from "../services/ripgrep"
 import { parseSourceCodeForDefinitionsTopLevel } from "../services/tree-sitter"
-import { ApiConfiguration } from "../shared/api"
+import type { ApiConfiguration, ApiProvider } from "../shared/api"
 import { findLast, findLastIndex, parsePartialArrayString } from "../shared/array"
 import { AutoApprovalSettings } from "../shared/AutoApprovalSettings"
 import { BrowserSettings } from "../shared/BrowserSettings"
@@ -1467,6 +1467,7 @@ export class Cline {
 		}
 
 		const block = cloneDeep(this.assistantMessageContent[this.currentStreamingContentIndex]) // need to create copy bc while stream is updating the array, it could be updating the reference block properties too
+        //12345
 		switch (block.type) {
 			case "text": {
 				if (this.didRejectTool || this.didAlreadyUseTool) {
@@ -1524,6 +1525,7 @@ export class Cline {
 				await this.say("text", content, undefined, block.partial)
 				break
 			}
+			
 			case "tool_use":
 				const toolDescription = () => {
 					switch (block.name) {
@@ -1556,9 +1558,7 @@ export class Cline {
 						case "attempt_completion":
 							return `[${block.name}]`
 						case "create_coder_agent":
-							return `[${block.name} for '${block.params.task_description?.substring(0, 30)}${
-								block.params.task_description && block.params.task_description.length > 30 ? "..." : ""
-							}']`
+							return `[${block.name} for '${block.params.task_description}']`
 					}
 				}
 
@@ -1670,6 +1670,27 @@ export class Cline {
 					try {
 						const { task_description, code_style, requirements } = block.params
 						
+						// 处理部分参数的情况（流式输出）
+						if (block.partial) {
+							const sharedMessageProps = {
+								tool: "create_coder_agent",
+								task_description: removeClosingTag("task_description", task_description),
+								code_style: removeClosingTag("code_style", code_style),
+								requirements: removeClosingTag("requirements", requirements)
+							}
+							
+							const partialMessage = JSON.stringify(sharedMessageProps)
+							
+							if (this.shouldAutoApproveTool(block.name)) {
+								this.removeLastPartialMessageIfExistsWithType("ask", "tool")
+								await this.say("tool", partialMessage, undefined, block.partial)
+							} else {
+								this.removeLastPartialMessageIfExistsWithType("say", "tool")
+								await this.ask("tool", partialMessage, block.partial).catch(() => {})
+							}
+							break
+						}
+						
 						// 验证必要参数
 						if (!task_description) {
 							this.consecutiveMistakeCount++
@@ -1707,13 +1728,17 @@ export class Cline {
 						) {
 							approved = true
 							this.consecutiveAutoApprovedRequestsCount++
-							await this.say("text", `自动批准创建代码智能体 (${this.consecutiveAutoApprovedRequestsCount}/${this.autoApprovalSettings.maxRequests})`)
+							// 不显示自动批准的提示，但显示完整任务描述
+							await this.say("text", `将创建代码智能体来处理任务："${task_description}"`)
 						} else {
 							// 重置自动批准计数
 							this.consecutiveAutoApprovedRequestsCount = 0
 							
+							// 使用完整任务描述
+							const fullApprovalMessage = `是否允许创建代码智能体来处理任务: "${task_description}"?`
+							
 							// 请求用户批准
-							approved = await askApproval("command", approvalMessage)
+							approved = await askApproval("command", fullApprovalMessage)
 							if (!approved) {
 								break
 							}
@@ -1726,6 +1751,24 @@ export class Cline {
 								const { AgentManager } = await import("../agents/AgentManager")
 								const agentManager = AgentManager.getInstance()
 								
+								// 确保AgentManager已初始化
+								if (!agentManager.isInitialized) {
+									// 获取扩展上下文
+									const provider = this.providerRef.deref()
+									if (!provider) {
+										throw new Error("无法获取ClineProvider实例")
+									}
+									
+									// 创建API配置
+									const apiConfiguration: ApiConfiguration = {
+										apiProvider: this.apiProvider as ApiProvider,
+										apiKey: this.api.getModel().id // 使用模型ID作为apiKey
+									}
+									
+									// 初始化AgentManager
+									agentManager.initialize(provider.context, apiConfiguration)
+								}
+								
 								// 创建代码智能体
 								const coderAgentId = await agentManager.createCoderAgent({
 									plannerAgentId: this.taskId,
@@ -1736,19 +1779,39 @@ export class Cline {
 									}
 								})
 								
-								// 向用户显示通知
+								// 完整的消息属性
+								const completeMessageProps = {
+									tool: "create_coder_agent",
+									task_description: task_description,
+									code_style: code_style,
+									requirements: requirements,
+									result: `代码智能体已创建，ID: ${coderAgentId.substring(0, 8)}`
+								}
+								
+								// 更新UI消息
+								const completeMessage = JSON.stringify(completeMessageProps)
+								
+								// 如果之前有显示部分消息，现在替换为完整消息
+								this.removeLastPartialMessageIfExistsWithType("ask", "tool")
+								this.removeLastPartialMessageIfExistsWithType("say", "tool")
+								
+								// 显示完整消息
+								await this.say("tool", completeMessage, undefined, false)
+								
+								// 记录工具使用情况
+								telemetryService.captureToolUsage(this.taskId, block.name, false, true)
+								
+								// 向用户显示通知，显示完整任务描述
 								await this.say(
 									"text",
-									`已创建代码智能体来处理任务："${task_description.substring(0, 50)}${
-										task_description.length > 50 ? "..." : ""
-									}"`
+									`已创建代码智能体来处理任务："${task_description}"`
 								)
 								
 								// 返回工具执行结果
 								pushToolResult(
 									formatResponse.toolResult(
-										`代码智能体已创建，ID: ${coderAgentId.substring(0, 8)}。该智能体将在独立任务队列中工作，完成后会向你报告结果。`
-									)
+											`代码智能体已创建，ID: ${coderAgentId.substring(0, 8)}。该智能体将在独立任务队列中工作，完成后会向你报告结果。`
+										)
 								)
 								
 								// 保存检查点
@@ -1756,10 +1819,10 @@ export class Cline {
 							} catch (error) {
 								// 处理AgentManager相关错误
 								pushToolResult(
-									formatResponse.toolError(
-										`创建代码智能体失败: ${error instanceof Error ? error.message : String(error)}`
+										formatResponse.toolError(
+											`创建代码智能体失败: ${error instanceof Error ? error.message : String(error)}`
+										)
 									)
-								)
 							}
 						}
 					} catch (error) {
