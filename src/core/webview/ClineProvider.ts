@@ -124,7 +124,7 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 	private static activeInstances: Set<ClineProvider> = new Set()
 	private disposables: vscode.Disposable[] = []
 	private view?: vscode.WebviewView | vscode.WebviewPanel
-	private cline?: Cline
+	private planner?: Cline
 	workspaceTracker?: WorkspaceTracker
 	mcpHub?: McpHub
 	private latestAnnouncementId = "feb-19-2025" // update to some unique identifier when we add a new announcement
@@ -283,51 +283,9 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 
 	async initClineWithTask(task?: string, images?: string[]) {
 		await this.clearTask()
-
-		try {
-			// 获取当前状态，包含所有必要配置
 			const { apiConfiguration, customInstructions, autoApprovalSettings, browserSettings, chatSettings } =
 				await this.getState()
-			
-			// 导入和获取AgentManager
-			const { AgentManager } = await import("../../agents/AgentManager")
-			const agentManager = AgentManager.getInstance()
-			
-			// 确保AgentManager已初始化
-			if (!agentManager.isInitialized) {
-				console.log('[ClineProvider] 正在初始化AgentManager...')
-				await agentManager.initialize(this.context, apiConfiguration, browserSettings)
-				console.log('[ClineProvider] AgentManager初始化完成')
-			}
-			
-			// 创建Cline实例，直接传入任务和图片
-			// 智能体类型默认为'planner'，会在构造函数中异步启动任务
-			this.cline = await agentManager.createClineAgent(
-				this.context,
-				apiConfiguration,
-				autoApprovalSettings,
-				browserSettings,
-				chatSettings,
-				'planner',  // 默认为计划智能体
-				undefined,  // 没有关联的计划智能体
-				customInstructions,
-				task,        // 直接传入任务
-				images,      // 直接传入图片
-				undefined,   // 没有历史项
-				this         // 传递当前ClineProvider实例
-			)
-			
-		} catch (error) {
-			console.error('[ClineProvider] 创建Cline智能体失败:', error)
-			// 回退到直接创建Cline实例的方式
-			console.log('[ClineProvider] 回退到直接创建Cline实例')
-			
-			// 获取所需配置
-			const { apiConfiguration, customInstructions, autoApprovalSettings, browserSettings, chatSettings } =
-				await this.getState()
-				
-			// 创建Cline实例但不自动启动任务
-			this.cline = new Cline(
+			this.planner = new Cline(
 				this,
 				apiConfiguration,
 				autoApprovalSettings,
@@ -340,65 +298,26 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 				images       // 直接传入图片
 			)
 		}
-	}
 
 	async initClineWithHistoryItem(historyItem: HistoryItem) {
 		await this.clearTask()
-
-		try {
-			// 获取必要的配置
-			const { apiConfiguration, customInstructions, autoApprovalSettings, browserSettings, chatSettings } =
-				await this.getState()
-
-			// 导入和获取AgentManager
-			const { AgentManager } = await import("../../agents/AgentManager")
-			const agentManager = AgentManager.getInstance()
-			
-			// 确保AgentManager已初始化
-			if (!agentManager.isInitialized) {
-				console.log('[ClineProvider] 正在初始化AgentManager...')
-				await agentManager.initialize(this.context, apiConfiguration, browserSettings)
-				console.log('[ClineProvider] AgentManager初始化完成')
-			}
-			
-			// 创建Cline实例
-			this.cline = await agentManager.createClineAgent(
-				this.context,
-				apiConfiguration,
-				autoApprovalSettings,
-				browserSettings,
-				chatSettings,
-				'planner',  // 固定使用计划智能体类型
-				undefined,  // 不需要计划智能体ID
-				customInstructions,
-				undefined,  // 不传递任务
-				undefined,  // 不传递图片
-				historyItem, // 传递历史记录
-				this  // 传递当前ClineProvider实例
-			)
-		} catch (error) {
-			console.error('[ClineProvider] 从历史记录恢复任务失败:', error)
-			
-			// 获取所需配置
-			const { apiConfiguration, customInstructions, autoApprovalSettings, browserSettings, chatSettings } =
-				await this.getState()
-				
-			// 回退到直接创建Cline实例
-			this.cline = new Cline(
-				this,
-				apiConfiguration,
-				autoApprovalSettings,
-				browserSettings,
-				chatSettings,
-				'planner',  // 固定使用计划智能体类型
-				undefined,  // 不需要计划智能体ID
-				customInstructions,
-				undefined,  // 不传递任务
-				undefined,  // 不传递图片
-				historyItem  // 传递历史记录
+		const { apiConfiguration, customInstructions, autoApprovalSettings, browserSettings, chatSettings } =
+			await this.getState()
+		// 回退到直接创建Cline实例
+		this.planner = new Cline(
+			this,
+			apiConfiguration,
+			autoApprovalSettings,
+			browserSettings,
+			chatSettings,
+			'planner',  // 固定使用计划智能体类型
+			undefined,  // 不需要计划智能体ID
+			customInstructions,
+			undefined,  // 不传递任务
+			undefined,  // 不传递图片
+			historyItem  // 传递历史记录
 			)
 		}
-	}
 
 	// Send any JSON serializable data to the react app
 	async postMessageToWebview(message: ExtensionMessage) {
@@ -641,8 +560,8 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 					case "autoApprovalSettings":
 						if (message.autoApprovalSettings) {
 							await this.updateGlobalState("autoApprovalSettings", message.autoApprovalSettings)
-							if (this.cline) {
-								this.cline.autoApprovalSettings = message.autoApprovalSettings
+							if (this.planner) {
+								this.planner.autoApprovalSettings = message.autoApprovalSettings
 							}
 							await this.postStateToWebview()
 						}
@@ -650,8 +569,8 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 					case "browserSettings":
 						if (message.browserSettings) {
 							await this.updateGlobalState("browserSettings", message.browserSettings)
-							if (this.cline) {
-								this.cline.updateBrowserSettings(message.browserSettings)
+							if (this.planner) {
+								this.planner.updateBrowserSettings(message.browserSettings)
 							}
 							await this.postStateToWebview()
 						}
@@ -669,12 +588,13 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 						})
 						break
 					// case "relaunchChromeDebugMode":
-					// 	if (this.cline) {
-					// 		this.cline.browserSession.relaunchChromeDebugMode()
+					// 	if (this.planner) {
+					// 		this.planner.browserSession.relaunchChromeDebugMode()
 					// 	}
 					// 	break
 					case "askResponse":
-						this.cline?.handleWebviewAskResponse(message.askResponse!, message.text, message.images)
+						console.log('askResponse', message)
+						this.planner?.handleWebviewAskResponse(message.askResponse!, message.text, message.images)
 						break
 					case "clearTask":
 						// newTask will start a new task with a given task text, while clear task resets the current session and allows for a new task to be started
@@ -693,7 +613,7 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 						})
 						break
 					case "exportCurrentTask":
-						const currentTaskId = this.cline?.taskId
+						const currentTaskId = this.planner?.taskId
 						if (currentTaskId) {
 							this.exportTaskWithId(currentTaskId)
 						}
@@ -761,7 +681,7 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 						break
 					case "checkpointDiff": {
 						if (message.number) {
-							await this.cline?.presentMultifileDiff(message.number, false)
+							await this.planner?.presentMultifileDiff(message.number, false)
 						}
 						break
 					}
@@ -770,19 +690,19 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 						// cancel task waits for any open editor to be reverted and starts a new cline instance
 						if (message.number) {
 							// wait for messages to be loaded
-							await pWaitFor(() => this.cline?.isInitialized === true, {
+							await pWaitFor(() => this.planner?.isInitialized === true, {
 								timeout: 3_000,
 							}).catch(() => {
 								console.error("Failed to init new cline instance")
 							})
 							// NOTE: cancelTask awaits abortTask, which awaits diffViewProvider.revertChanges, which reverts any edited files, allowing us to reset to a checkpoint rather than running into a state where the revertChanges function is called alongside or after the checkpoint reset
-							await this.cline?.restoreCheckpoint(message.number, message.text! as ClineCheckpointRestore)
+							await this.planner?.restoreCheckpoint(message.number, message.text! as ClineCheckpointRestore)
 						}
 						break
 					}
 					case "taskCompletionViewChanges": {
 						if (message.number) {
-							await this.cline?.presentMultifileDiff(message.number, true)
+							await this.planner?.presentMultifileDiff(message.number, true)
 						}
 						break
 					}
@@ -1026,7 +946,7 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 		const didSwitchToActMode = chatSettings.mode === "act"
 
 		// Capture mode switch telemetry | Capture regardless of if we know the taskId
-		telemetryService.captureModeSwitch(this.cline?.taskId ?? "0", chatSettings.mode)
+		telemetryService.captureModeSwitch(this.planner?.taskId ?? "0", chatSettings.mode)
 
 		// Get previous model info that we will revert to after saving current mode api info
 		const {
@@ -1122,9 +1042,9 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 						break
 				}
 
-				if (this.cline) {
+				if (this.planner) {
 					const { apiConfiguration: updatedApiConfiguration } = await this.getState()
-					this.cline.api = buildApiHandler(updatedApiConfiguration)
+					this.planner.api = buildApiHandler(updatedApiConfiguration)
 				}
 			}
 		}
@@ -1132,10 +1052,10 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 		await this.updateGlobalState("chatSettings", chatSettings)
 		await this.postStateToWebview()
 
-		if (this.cline) {
-			this.cline.updateChatSettings(chatSettings)
-			if (this.cline.isAwaitingPlanResponse && didSwitchToActMode) {
-				this.cline.didRespondToPlanAskBySwitchingMode = true
+		if (this.planner) {
+			this.planner.updateChatSettings(chatSettings)
+			if (this.planner.isAwaitingPlanResponse && didSwitchToActMode) {
+				this.planner.didRespondToPlanAskBySwitchingMode = true
 				// Use chatContent if provided, otherwise use default message
 				await this.postMessageToWebview({
 					type: "invoke",
@@ -1150,28 +1070,28 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 	}
 
 	async cancelTask() {
-		if (this.cline) {
-			const { historyItem } = await this.getTaskWithId(this.cline.taskId)
+		if (this.planner) {
+			const { historyItem } = await this.getTaskWithId(this.planner.taskId)
 			try {
-				await this.cline.abortTask()
+				await this.planner.abortTask()
 			} catch (error) {
 				console.error("Failed to abort task", error)
 			}
 			await pWaitFor(
 				() =>
-					this.cline === undefined ||
-					this.cline.isStreaming === false ||
-					this.cline.didFinishAbortingStream ||
-					this.cline.isWaitingForFirstChunk, // if only first chunk is processed, then there's no need to wait for graceful abort (closes edits, browser, etc)
+					this.planner === undefined ||
+					this.planner.isStreaming === false ||
+					this.planner.didFinishAbortingStream ||
+					this.planner.isWaitingForFirstChunk, // if only first chunk is processed, then there's no need to wait for graceful abort (closes edits, browser, etc)
 				{
 					timeout: 3_000,
 				},
 			).catch(() => {
 				console.error("Failed to abort task")
 			})
-			if (this.cline) {
+			if (this.planner) {
 				// 'abandoned' will prevent this cline instance from affecting future cline instance gui. this may happen if its hanging on a streaming request
-				this.cline.abandoned = true
+				this.planner.abandoned = true
 			}
 			await this.initClineWithHistoryItem(historyItem) // clears task again, so we need to abortTask manually above
 			// await this.postStateToWebview() // new Cline instance will post state when it's ready. having this here sent an empty messages array to webview leading to virtuoso having to reload the entire list
@@ -1181,8 +1101,8 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 	async updateCustomInstructions(instructions?: string) {
 		// User may be clearing the field
 		await this.updateGlobalState("customInstructions", instructions || undefined)
-		if (this.cline) {
-			this.cline.customInstructions = instructions || undefined
+		if (this.planner) {
+			this.planner.customInstructions = instructions || undefined
 		}
 	}
 
@@ -1285,8 +1205,8 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 		await this.updateGlobalState("thinkingBudgetTokens", thinkingBudgetTokens)
 		await this.storeSecret("clineApiKey", clineApiKey)
 		await this.storeSecret("sambanovaApiKey", sambanovaApiKey)
-		if (this.cline) {
-			this.cline.api = buildApiHandler(apiConfiguration)
+		if (this.planner) {
+			this.planner.api = buildApiHandler(apiConfiguration)
 		}
 	}
 
@@ -1428,8 +1348,8 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 				clineApiKey: apiKey,
 			}
 
-			if (this.cline) {
-				this.cline.api = buildApiHandler(updatedConfig)
+			if (this.planner) {
+				this.planner.api = buildApiHandler(updatedConfig)
 			}
 
 			await this.postStateToWebview()
@@ -1656,8 +1576,8 @@ Here is the project's README to help you get started:\n\n${mcpDetails.readmeCont
 		await this.updateGlobalState("apiProvider", openrouter)
 		await this.storeSecret("openRouterApiKey", apiKey)
 		await this.postStateToWebview()
-		if (this.cline) {
-			this.cline.api = buildApiHandler({
+		if (this.planner) {
+			this.planner.api = buildApiHandler({
 				apiProvider: openrouter,
 				openRouterApiKey: apiKey,
 			})
@@ -1837,7 +1757,7 @@ Here is the project's README to help you get started:\n\n${mcpDetails.readmeCont
 	}
 
 	async showTaskWithId(id: string) {
-		if (id !== this.cline?.taskId) {
+		if (id !== this.planner?.taskId) {
 			// non-current task
 			const { historyItem } = await this.getTaskWithId(id)
 			await this.initClineWithHistoryItem(historyItem) // clears existing task
@@ -1878,7 +1798,7 @@ Here is the project's README to help you get started:\n\n${mcpDetails.readmeCont
 	async deleteTaskWithId(id: string) {
 		console.info("deleteTaskWithId: ", id)
 
-		if (id === this.cline?.taskId) {
+		if (id === this.planner?.taskId) {
 			await this.clearTask()
 			console.debug("cleared task")
 		}
@@ -1952,9 +1872,9 @@ Here is the project's README to help you get started:\n\n${mcpDetails.readmeCont
 			apiConfiguration,
 			customInstructions,
 			uriScheme: vscode.env.uriScheme,
-			currentTaskItem: this.cline?.taskId ? (taskHistory || []).find((item) => item.id === this.cline?.taskId) : undefined,
-			checkpointTrackerErrorMessage: this.cline?.checkpointTrackerErrorMessage,
-			clineMessages: this.cline?.clineMessages || [],
+			currentTaskItem: this.planner?.taskId ? (taskHistory || []).find((item) => item.id === this.planner?.taskId) : undefined,
+			checkpointTrackerErrorMessage: this.planner?.checkpointTrackerErrorMessage,
+			clineMessages: this.planner?.clineMessages || [],
 			taskHistory: (taskHistory || [])
 				.filter((item) => item.ts && item.task)
 				.sort((a, b) => b.ts - a.ts)
@@ -1973,8 +1893,8 @@ Here is the project's README to help you get started:\n\n${mcpDetails.readmeCont
 	}
 
 	async clearTask() {
-		this.cline?.abortTask()
-		this.cline = undefined // removes reference to it, so once promises end it will be garbage collected
+		this.planner?.abortTask()
+		this.planner = undefined // removes reference to it, so once promises end it will be garbage collected
 	}
 
 	// Caching mechanism to keep track of webview messages + API conversation history per provider instance
@@ -2390,9 +2310,9 @@ Here is the project's README to help you get started:\n\n${mcpDetails.readmeCont
 		for (const key of secretKeys) {
 			await this.storeSecret(key, undefined)
 		}
-		if (this.cline) {
-			this.cline.abortTask()
-			this.cline = undefined
+		if (this.planner) {
+			this.planner.abortTask()
+			this.planner = undefined
 		}
 		vscode.window.showInformationMessage("State reset")
 		await this.postStateToWebview()

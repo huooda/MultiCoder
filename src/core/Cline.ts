@@ -57,6 +57,7 @@ import { ClineIgnoreController, LOCK_TEXT_SYMBOL } from "./ignore/ClineIgnoreCon
 import { parseMentions } from "./mentions"
 import { formatResponse } from "./prompts/responses"
 import { PLANNER_AGENT_PROMPT, addUserInstructions } from "./prompts/planner_agent"
+import { CODER_AGENT_PROMPT } from "./prompts/coder_agent"
 import { getNextTruncationRange, getTruncatedMessages } from "./sliding-window"
 import { OpenAiHandler } from "../api/providers/openai"
 import { ApiStream } from "../api/transform/stream"
@@ -1382,8 +1383,12 @@ export class Cline {
 		const cwd = await this.ensureTaskDirectoryExists()
 
 		// 使用计划智能体提示词
-		let systemPrompt = await PLANNER_AGENT_PROMPT(cwd, this.browserSettings)
-
+		let systemPrompt = ""
+		if (this.agentType === 'planner') {
+			systemPrompt = await PLANNER_AGENT_PROMPT(cwd, this.browserSettings)
+		} else if (this.agentType === 'coder') {
+			systemPrompt = await CODER_AGENT_PROMPT(cwd, this.browserSettings)
+		}
 		let settingsCustomInstructions = this.customInstructions?.trim()
 		const preferredLanguage = getLanguageKey(
 			vscode.workspace.getConfiguration("cline").get<LanguageDisplay>("preferredLanguage"),
