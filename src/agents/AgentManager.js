@@ -7,6 +7,8 @@ import { MessageType } from "./types";
 import { DEFAULT_BROWSER_SETTINGS } from "../shared/BrowserSettings";
 import { PLANNER_AGENT_PROMPT } from "../core/prompts/planner_agent";
 import { CODER_AGENT_PROMPT } from "../core/prompts/coder_agent";
+import { Cline } from "../core/Cline";
+import { ClineProvider } from "../core/webview/ClineProvider";
 /**
  * 智能体管理器
  * 负责创建、获取和销毁智能体
@@ -26,6 +28,8 @@ export class AgentManager {
     browserSettings = DEFAULT_BROWSER_SETTINGS;
     // 当前工作目录
     cwd = "";
+    // 初始化状态
+    isInitialized = false;
     constructor() {
         // 私有构造函数，确保单例模式
         // 注册事件处理器
@@ -45,9 +49,11 @@ export class AgentManager {
     /**
      * 初始化AgentManager
      */
-    initialize(context, apiConfiguration) {
+    initialize(context, apiConfiguration, browserSettings = DEFAULT_BROWSER_SETTINGS) {
         // 保存API配置
         this.apiConfiguration = apiConfiguration;
+        // 保存浏览器设置
+        this.browserSettings = browserSettings;
         // 创建API处理器
         this.apiHandler = buildApiHandler(apiConfiguration);
         // 设置当前工作目录
@@ -57,6 +63,7 @@ export class AgentManager {
             .then(tracker => {
             this.checkpointTracker = tracker;
             console.log('[AgentManager] 检查点跟踪器初始化完成');
+            this.isInitialized = true;
         })
             .catch(error => {
             console.error('[AgentManager] 检查点跟踪器初始化失败:', error);
@@ -184,6 +191,94 @@ export class AgentManager {
         if (message.type === MessageType.TaskComplete && targetAgent instanceof PlannerAgent) {
             targetAgent.handleCoderAgentCompletion(message);
         }
+    }
+    /**
+     * 创建Cline智能体实例
+     * 将Cline纳入统一管理
+     */
+    async createClineAgent(context, apiConfiguration, autoApprovalSettings, browserSettings = DEFAULT_BROWSER_SETTINGS, chatSettings, customInstructions, task, images) {
+        if (!this.apiHandler || !this.checkpointTracker) {
+            throw new Error('AgentManager未初始化，无法创建智能体');
+        }
+        // 创建输出通道
+        const outputChannel = vscode.window.createOutputChannel(`Cline Agent (${Date.now()})`);
+        // 创建Cline提供者和实例
+        const clineProvider = new ClineProvider(context, outputChannel);
+        const cline = new Cline(clineProvider, apiConfiguration, autoApprovalSettings, browserSettings, chatSettings, customInstructions, task, images);
+        // 使用任务ID作为智能体ID
+        const agentId = cline.taskId;
+        // 将Cline实例注册到智能体管理
+        // 注意：Cline不是BaseAgent的子类，但我们仍在同一集合中管理它
+        // 这里使用类型断言，实际使用时需要区分处理
+        this.agents.set(agentId, cline);
+        console.log(`[AgentManager] 创建了Cline智能体 (ID: ${agentId.substring(0, 8)})`);
+        // 如果提供了任务，则启动该任务
+        if (task) {
+            Promise.resolve().then(async () => {
+                try {
+                    await cline.startTask(task, images);
+                    console.log(`[AgentManager] Cline智能体 ${agentId.substring(0, 8)} 已自动启动任务`);
+                }
+                catch (error) {
+                    console.error(`[AgentManager] 启动任务时出错:`, error);
+                }
+            });
+        }
+        return cline;
+    }
+    /**
+     * 在独立线程中运行智能体任务
+     * @param agentId 智能体ID
+     * @param taskContent 任务内容
+     * @param images 可选的图片数组
+     */
+    runAgentInSeparateThread(agentId, taskContent, images) {
+        // 获取智能体
+        const agent = this.agents.get(agentId);
+        if (!agent) {
+            console.error(`[AgentManager] 未找到智能体 (ID: ${agentId})`);
+            return;
+        }
+        // 创建任务
+        const task = {
+            id: `task-${Date.now()}`,
+            type: 'user_request',
+            content: taskContent,
+            timestamp: Date.now()
+        };
+        // 在独立Promise中异步运行任务
+        Promise.resolve().then(async () => {
+            try {
+                // 如果是BaseAgent的实例，调用processTask
+                if ('processTask' in agent) {
+                    const result = await agent.processTask(task);
+                    console.log(`[AgentManager] 智能体 ${agentId} 任务执行结果:`, result);
+                }
+                // 如果是Cline实例，直接调用startTask
+                else if ('startTask' in agent && typeof agent.startTask === 'function') {
+                    await agent.startTask(taskContent, images);
+                    console.log(`[AgentManager] Cline智能体 ${agentId} 已开始执行任务`);
+                }
+                else {
+                    console.error(`[AgentManager] 无法识别的智能体类型:`, agent);
+                }
+            }
+            catch (error) {
+                console.error(`[AgentManager] 智能体 ${agentId} 任务执行错误:`, error);
+            }
+        });
+        console.log(`[AgentManager] 已启动智能体 ${agentId} 在独立线程中`);
+    }
+    /**
+     * 获取Cline实例
+     */
+    getClineAgent(agentId) {
+        const agent = this.agents.get(agentId);
+        // 检查是否是Cline实例
+        if (agent && 'startTask' in agent) {
+            return agent;
+        }
+        return undefined;
     }
 }
 //# sourceMappingURL=AgentManager.js.map

@@ -284,33 +284,113 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 		await this.clearTask() // ensures that an existing task doesn't exist before starting a new one, although this shouldn't be possible since user must clear task before starting a new one
 		const { apiConfiguration, customInstructions, autoApprovalSettings, browserSettings, chatSettings } =
 			await this.getState()
-		this.cline = new Cline(
-			this,
-			apiConfiguration,
-			autoApprovalSettings,
-			browserSettings,
-			chatSettings,
-			customInstructions,
-			task,
-			images,
-		)
+		
+		try {
+			// 导入和获取AgentManager
+			const { AgentManager } = await import("../../agents/AgentManager")
+			const agentManager = AgentManager.getInstance()
+			
+			// 确保AgentManager已初始化
+			if (!agentManager.isInitialized) {
+				console.log('[ClineProvider] 正在初始化AgentManager...')
+				await agentManager.initialize(this.context, apiConfiguration, browserSettings)
+				console.log('[ClineProvider] AgentManager初始化完成')
+			}
+			
+			// 创建Cline实例并由AgentManager管理（但不自动启动任务）
+			this.cline = await agentManager.getClineAgentOrCreate(
+				this.context,
+				apiConfiguration,
+				autoApprovalSettings,
+				browserSettings,
+				chatSettings,
+				customInstructions,
+				undefined, // 不传递任务，避免自动启动
+				undefined, // 不传递图片，避免自动启动
+				undefined, // 没有历史项
+				this // 传递当前ClineProvider实例
+			)
+			
+			// 如果有任务，使用检查点锁机制启动该任务
+			if (task) {
+				// 使用runAgentInSeparateThread方法统一启动任务
+				// 这确保任务在检查点锁的保护下执行，避免并发问题
+				agentManager.runAgentInSeparateThread(this.cline.taskId, task, images)
+			}
+			
+		} catch (error) {
+			console.error('[ClineProvider] 创建Cline智能体失败:', error)
+			// 回退到直接创建Cline实例的方式
+			console.log('[ClineProvider] 回退到直接创建Cline实例')
+			// 创建Cline实例但不自动启动任务
+			this.cline = new Cline(
+				this,
+				apiConfiguration,
+				autoApprovalSettings,
+				browserSettings,
+				chatSettings,
+				customInstructions,
+				undefined, // 不传递任务，避免自动启动 
+				undefined  // 不传递图片，避免自动启动
+			)
+			
+			// 如果有任务，手动启动
+			if (task) {
+				try {
+					await this.cline.startTask(task, images)
+				} catch (error) {
+					console.error('[ClineProvider] 启动任务失败:', error)
+				}
+			}
+		}
 	}
 
 	async initClineWithHistoryItem(historyItem: HistoryItem) {
 		await this.clearTask()
 		const { apiConfiguration, customInstructions, autoApprovalSettings, browserSettings, chatSettings } =
 			await this.getState()
-		this.cline = new Cline(
-			this,
-			apiConfiguration,
-			autoApprovalSettings,
-			browserSettings,
-			chatSettings,
-			customInstructions,
-			undefined,
-			undefined,
-			historyItem,
-		)
+		
+		try {
+			// 导入和获取AgentManager
+			const { AgentManager } = await import("../../agents/AgentManager")
+			const agentManager = AgentManager.getInstance()
+			
+			// 确保AgentManager已初始化
+			if (!agentManager.isInitialized) {
+				console.log('[ClineProvider] 正在初始化AgentManager...')
+				await agentManager.initialize(this.context, apiConfiguration, browserSettings)
+				console.log('[ClineProvider] AgentManager初始化完成')
+			}
+			
+			// 创建带历史记录的Cline实例
+			this.cline = await agentManager.getClineAgentOrCreate(
+				this.context,
+				apiConfiguration,
+				autoApprovalSettings,
+				browserSettings,
+				chatSettings,
+				customInstructions,
+				undefined,  // 不传递任务
+				undefined,  // 不传递图片
+				historyItem, // 传递历史记录
+				this // 传递当前ClineProvider实例
+			)
+		} catch (error) {
+			console.error('[ClineProvider] 创建Cline智能体失败:', error)
+			// 回退到直接创建Cline实例的方式
+			console.log('[ClineProvider] 回退到直接创建Cline实例')
+			this.cline = new Cline(
+				this,
+				apiConfiguration,
+				autoApprovalSettings,
+				browserSettings,
+				chatSettings,
+				customInstructions,
+				undefined,  // 不传递任务
+				undefined,  // 不传递图片
+				historyItem // 传递历史记录
+			)
+		}
 	}
 
 	// Send any JSON serializable data to the react app
@@ -2313,5 +2393,44 @@ Here is the project's README to help you get started:\n\n${mcpDetails.readmeCont
 			type: "action",
 			action: "chatButtonClicked",
 		})
+	}
+
+	/**
+	 * 创建代码智能体，由计划智能体发起
+	 * @param plannerAgentId 计划智能体ID
+	 * @param task 代码智能体的任务
+	 * @param images 可选的图片
+	 * @returns 代码智能体ID
+	 */
+	async createCoderAgent(plannerAgentId: string, task: string, images?: string[]): Promise<string> {
+		const { apiConfiguration, customInstructions, autoApprovalSettings, browserSettings, chatSettings } =
+			await this.getState()
+			
+		try {
+			// 导入和获取AgentManager
+			const { AgentManager } = await import("../../agents/AgentManager")
+			const agentManager = AgentManager.getInstance()
+			
+			// 确保AgentManager已初始化
+			if (!agentManager.isInitialized) {
+				console.log('[ClineProvider] 正在初始化AgentManager...')
+				await agentManager.initialize(this.context, apiConfiguration, browserSettings)
+				console.log('[ClineProvider] AgentManager初始化完成')
+			}
+			
+			// 创建代码智能体
+			const coderAgentId = await agentManager.createCoderAgentFromPlanner(
+				plannerAgentId,
+				task,
+				images
+			)
+			
+			console.log(`[ClineProvider] 成功创建代码智能体 (ID: ${coderAgentId.substring(0, 8)})，关联计划智能体: ${plannerAgentId.substring(0, 8)}`)
+			
+			return coderAgentId
+		} catch (error) {
+			console.error('[ClineProvider] 创建代码智能体失败:', error)
+			throw error
+		}
 	}
 }

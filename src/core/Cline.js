@@ -1232,6 +1232,7 @@ export class Cline {
             //throw new Error("No more content blocks to stream! This shouldn't happen...") // remove and just return after testing
         }
         const block = cloneDeep(this.assistantMessageContent[this.currentStreamingContentIndex]); // need to create copy bc while stream is updating the array, it could be updating the reference block properties too
+        //12345
         switch (block.type) {
             case "text": {
                 if (this.didRejectTool || this.didAlreadyUseTool) {
@@ -1317,7 +1318,7 @@ export class Cline {
                         case "attempt_completion":
                             return `[${block.name}]`;
                         case "create_coder_agent":
-                            return `[${block.name} for '${block.params.task_description?.substring(0, 30)}${block.params.task_description && block.params.task_description.length > 30 ? "..." : ""}']`;
+                            return `[${block.name} for '${block.params.task_description}']`;
                     }
                 };
                 if (this.didRejectTool) {
@@ -1420,15 +1421,28 @@ export class Cline {
                 if (block.name === "create_coder_agent") {
                     try {
                         const { task_description, code_style, requirements } = block.params;
-                        // 添加日志输出
-                        console.log("create_coder_agent tool params:", JSON.stringify(block.params, null, 2));
-                        console.log("task_description:", task_description);
-                        console.log("code_style:", code_style);
-                        console.log("requirements:", requirements);
+                        // 处理部分参数的情况（流式输出）
+                        if (block.partial) {
+                            const sharedMessageProps = {
+                                tool: "create_coder_agent",
+                                task_description: removeClosingTag("task_description", task_description),
+                                code_style: removeClosingTag("code_style", code_style),
+                                requirements: removeClosingTag("requirements", requirements)
+                            };
+                            const partialMessage = JSON.stringify(sharedMessageProps);
+                            if (this.shouldAutoApproveTool(block.name)) {
+                                this.removeLastPartialMessageIfExistsWithType("ask", "tool");
+                                await this.say("tool", partialMessage, undefined, block.partial);
+                            }
+                            else {
+                                this.removeLastPartialMessageIfExistsWithType("say", "tool");
+                                await this.ask("tool", partialMessage, block.partial).catch(() => { });
+                            }
+                            break;
+                        }
                         // 验证必要参数
                         if (!task_description) {
                             this.consecutiveMistakeCount++;
-                            console.error("Missing required parameter: task_description");
                             pushToolResult(await this.sayAndCreateMissingParamError("create_coder_agent", "task_description"));
                             break;
                         }
@@ -1453,13 +1467,16 @@ export class Cline {
                             this.consecutiveAutoApprovedRequestsCount < this.autoApprovalSettings.maxRequests) {
                             approved = true;
                             this.consecutiveAutoApprovedRequestsCount++;
-                            await this.say("text", `自动批准创建代码智能体 (${this.consecutiveAutoApprovedRequestsCount}/${this.autoApprovalSettings.maxRequests})`);
+                            // 不显示自动批准的提示，但显示完整任务描述
+                            await this.say("text", `将创建代码智能体来处理任务："${task_description}"`);
                         }
                         else {
                             // 重置自动批准计数
                             this.consecutiveAutoApprovedRequestsCount = 0;
+                            // 使用完整任务描述
+                            const fullApprovalMessage = `是否允许创建代码智能体来处理任务: "${task_description}"?`;
                             // 请求用户批准
-                            approved = await askApproval("command", approvalMessage);
+                            approved = await askApproval("command", fullApprovalMessage);
                             if (!approved) {
                                 break;
                             }
@@ -1470,6 +1487,21 @@ export class Cline {
                                 // 导入AgentManager
                                 const { AgentManager } = await import("../agents/AgentManager");
                                 const agentManager = AgentManager.getInstance();
+                                // 确保AgentManager已初始化
+                                if (!agentManager.isInitialized) {
+                                    // 获取扩展上下文
+                                    const provider = this.providerRef.deref();
+                                    if (!provider) {
+                                        throw new Error("无法获取ClineProvider实例");
+                                    }
+                                    // 创建API配置
+                                    const apiConfiguration = {
+                                        apiProvider: this.apiProvider,
+                                        apiKey: this.api.getModel().id // 使用模型ID作为apiKey
+                                    };
+                                    // 初始化AgentManager
+                                    agentManager.initialize(provider.context, apiConfiguration, this.browserSettings);
+                                }
                                 // 创建代码智能体
                                 const coderAgentId = await agentManager.createCoderAgent({
                                     plannerAgentId: this.taskId,
@@ -1479,8 +1511,25 @@ export class Cline {
                                         requirements: requirements
                                     }
                                 });
-                                // 向用户显示通知
-                                await this.say("text", `已创建代码智能体来处理任务："${task_description.substring(0, 50)}${task_description.length > 50 ? "..." : ""}"`);
+                                // 完整的消息属性
+                                const completeMessageProps = {
+                                    tool: "create_coder_agent",
+                                    task_description: task_description,
+                                    code_style: code_style,
+                                    requirements: requirements,
+                                    result: `代码智能体已创建，ID: ${coderAgentId.substring(0, 8)}`
+                                };
+                                // 更新UI消息
+                                const completeMessage = JSON.stringify(completeMessageProps);
+                                // 如果之前有显示部分消息，现在替换为完整消息
+                                this.removeLastPartialMessageIfExistsWithType("ask", "tool");
+                                this.removeLastPartialMessageIfExistsWithType("say", "tool");
+                                // 显示完整消息
+                                await this.say("tool", completeMessage, undefined, false);
+                                // 记录工具使用情况
+                                telemetryService.captureToolUsage(this.taskId, block.name, false, true);
+                                // 向用户显示通知，显示完整任务描述
+                                await this.say("text", `已创建代码智能体来处理任务："${task_description}"`);
                                 // 返回工具执行结果
                                 pushToolResult(formatResponse.toolResult(`代码智能体已创建，ID: ${coderAgentId.substring(0, 8)}。该智能体将在独立任务队列中工作，完成后会向你报告结果。`));
                                 // 保存检查点
@@ -3169,17 +3218,16 @@ export class Cline {
                 details += result;
             }
         }
-        details += "\n\n# Current Mode";
-        if (this.chatSettings.mode === "plan") {
-            details += "\nPLAN MODE";
-            details +=
-                "\nIn this mode you should focus on information gathering, asking questions, and architecting a solution. Once you have a plan, use the plan_mode_response tool to engage in a conversational back and forth with the user. Do not use the plan_mode_response tool until you've gathered all the information you need e.g. with read_file or ask_followup_question.";
-            details +=
-                "\n(Remember: If it seems the user wants you to use tools only available in Act Mode, you should ask the user to \"toggle to Act mode\" (use those words) - they will have to manually do this themselves with the Plan/Act toggle button below. You do not have the ability to switch to Act Mode yourself, and must wait for the user to do it themselves once they are satisfied with the plan. You also cannot present an option to toggle to Act mode, as this will be something you need to direct the user to do manually themselves.)";
-        }
-        else {
-            details += "\nACT MODE";
-        }
+        // details += "\n\n# Current Mode"
+        // if (this.chatSettings.mode === "plan") {
+        // 	details += "\nPLAN MODE"
+        // 	details +=
+        // 		"\nIn this mode you should focus on information gathering, asking questions, and architecting a solution. Once you have a plan, use the plan_mode_response tool to engage in a conversational back and forth with the user. Do not use the plan_mode_response tool until you've gathered all the information you need e.g. with read_file or ask_followup_question."
+        // 	details +=
+        // 		"\n(Remember: If it seems the user wants you to use tools only available in Act Mode, you should ask the user to \"toggle to Act mode\" (use those words) - they will have to manually do this themselves with the Plan/Act toggle button below. You do not have the ability to switch to Act Mode yourself, and must wait for the user to do it themselves once they are satisfied with the plan. You also cannot present an option to toggle to Act mode, as this will be something you need to direct the user to do manually themselves.)"
+        // } else {
+        // 	details += "\nACT MODE"
+        // }
         return `<environment_details>\n${details.trim()}\n</environment_details>`;
     }
 }

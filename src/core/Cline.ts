@@ -118,6 +118,12 @@ export class Cline {
 	isInitialized = false
 	isAwaitingPlanResponse = false
 	didRespondToPlanAskBySwitchingMode = false
+	
+	// 智能体类型：planner(计划智能体)或coder(代码智能体)
+	private agentType: 'planner' | 'coder' = 'planner'
+	
+	// 如果是代码智能体，存储关联的计划智能体ID
+	private plannerAgentId?: string
 
 	// streaming
 	isWaitingForFirstChunk = false
@@ -186,6 +192,40 @@ export class Cline {
 
 	updateChatSettings(chatSettings: ChatSettings) {
 		this.chatSettings = chatSettings
+	}
+	
+	/**
+	 * 设置智能体类型
+	 * @param type 智能体类型：'planner'(计划智能体)或'coder'(代码智能体)
+	 */
+	setAgentType(type: 'planner' | 'coder') {
+		this.agentType = type
+		console.log(`[Cline] 设置智能体类型: ${type}`)
+	}
+	
+	/**
+	 * 获取当前智能体类型
+	 * @returns 当前智能体类型
+	 */
+	getAgentType(): 'planner' | 'coder' {
+		return this.agentType
+	}
+	
+	/**
+	 * 设置关联的计划智能体ID（代码智能体使用）
+	 * @param agentId 计划智能体ID
+	 */
+	setPlannerAgentId(agentId: string) {
+		this.plannerAgentId = agentId
+		console.log(`[Cline] 设置关联的计划智能体ID: ${agentId}`)
+	}
+	
+	/**
+	 * 获取关联的计划智能体ID
+	 * @returns 计划智能体ID，如果未设置则返回undefined
+	 */
+	getPlannerAgentId(): string | undefined {
+		return this.plannerAgentId
 	}
 
 	// Storing task to disk for history
@@ -820,7 +860,7 @@ export class Cline {
 
 	// Task lifecycle
 
-	private async startTask(task?: string, images?: string[]): Promise<void> {
+	async startTask(task?: string, images?: string[]): Promise<void> {
 		// conversationHistory (for API) and clineMessages (for webview) need to be in sync
 		// if the extension process were killed, then on restart the clineMessages might not be empty, so we need to set it to [] when we create a new Cline client (otherwise webview would show stale messages from previous session)
 		this.clineMessages = []
@@ -828,10 +868,26 @@ export class Cline {
 
 		await this.providerRef.deref()?.postStateToWebview()
 
+		// 添加用户任务到消息中
 		await this.say("text", task, images)
 
 		this.isInitialized = true
 
+		// 根据智能体类型选择不同的启动路径
+		if (this.agentType === 'coder') {
+			// 代码智能体特有启动逻辑
+			await this.startCoderTask(task, images)
+		} else {
+			// 默认为计划智能体的启动逻辑
+			await this.startPlannerTask(task, images)
+		}
+	}
+	
+	/**
+	 * 启动计划智能体任务
+	 * 包含创建检查点等标准流程
+	 */
+	private async startPlannerTask(task?: string, images?: string[]): Promise<void> {
 		let imageBlocks: Anthropic.ImageBlockParam[] = formatResponse.imageBlocks(images)
 		await this.initiateTaskLoop(
 			[
@@ -843,6 +899,34 @@ export class Cline {
 			],
 			true,
 		)
+	}
+	
+	/**
+	 * 启动代码智能体任务
+	 * 由计划智能体触发，处理特定的代码编写或修改任务
+	 */
+	private async startCoderTask(task?: string, images?: string[]): Promise<void> {
+		// 确保有关联的计划智能体ID
+		if (!this.plannerAgentId) {
+			console.warn('[Cline] 警告: 代码智能体没有关联的计划智能体ID')
+		}
+		
+		let imageBlocks: Anthropic.ImageBlockParam[] = formatResponse.imageBlocks(images)
+		
+		// 为代码智能体任务增加特殊的提示信息
+		await this.initiateTaskLoop(
+			[
+				{
+					type: "text",
+					text: `<task type="code">\n${task}\n</task>`,
+				},
+				...imageBlocks,
+			],
+			true,
+		)
+		
+		// 代码智能体使用相同的initiateTaskLoop，但后续会有不同的处理逻辑
+		// 例如，可能不创建检查点，或者完成后会将结果发送回计划智能体
 	}
 
 	private async resumeTaskFromHistory() {
@@ -1766,7 +1850,7 @@ export class Cline {
 									}
 									
 									// 初始化AgentManager
-									agentManager.initialize(provider.context, apiConfiguration)
+									agentManager.initialize(provider.context, apiConfiguration, this.browserSettings)
 								}
 								
 								// 创建代码智能体
@@ -3770,17 +3854,102 @@ export class Cline {
 			}
 		}
 
-		details += "\n\n# Current Mode"
-		if (this.chatSettings.mode === "plan") {
-			details += "\nPLAN MODE"
-			details +=
-				"\nIn this mode you should focus on information gathering, asking questions, and architecting a solution. Once you have a plan, use the plan_mode_response tool to engage in a conversational back and forth with the user. Do not use the plan_mode_response tool until you've gathered all the information you need e.g. with read_file or ask_followup_question."
-			details +=
-				"\n(Remember: If it seems the user wants you to use tools only available in Act Mode, you should ask the user to \"toggle to Act mode\" (use those words) - they will have to manually do this themselves with the Plan/Act toggle button below. You do not have the ability to switch to Act Mode yourself, and must wait for the user to do it themselves once they are satisfied with the plan. You also cannot present an option to toggle to Act mode, as this will be something you need to direct the user to do manually themselves.)"
-		} else {
-			details += "\nACT MODE"
-		}
+		// details += "\n\n# Current Mode"
+		// if (this.chatSettings.mode === "plan") {
+		// 	details += "\nPLAN MODE"
+		// 	details +=
+		// 		"\nIn this mode you should focus on information gathering, asking questions, and architecting a solution. Once you have a plan, use the plan_mode_response tool to engage in a conversational back and forth with the user. Do not use the plan_mode_response tool until you've gathered all the information you need e.g. with read_file or ask_followup_question."
+		// 	details +=
+		// 		"\n(Remember: If it seems the user wants you to use tools only available in Act Mode, you should ask the user to \"toggle to Act mode\" (use those words) - they will have to manually do this themselves with the Plan/Act toggle button below. You do not have the ability to switch to Act Mode yourself, and must wait for the user to do it themselves once they are satisfied with the plan. You also cannot present an option to toggle to Act mode, as this will be something you need to direct the user to do manually themselves.)"
+		// } else {
+		// 	details += "\nACT MODE"
+		// }
 
 		return `<environment_details>\n${details.trim()}\n</environment_details>`
+	}
+
+	/**
+	 * 发送结果给计划智能体
+	 * 仅适用于代码智能体
+	 * @param result 任务结果
+	 */
+	async sendResultToPlannerAgent(result: string): Promise<void> {
+		// 检查是否是代码智能体
+		if (this.agentType !== 'coder') {
+			console.warn('[Cline] 警告: 只有代码智能体可以发送结果给计划智能体')
+			return
+		}
+		
+		// 检查是否设置了关联的计划智能体ID
+		if (!this.plannerAgentId) {
+			console.error('[Cline] 错误: 代码智能体没有关联的计划智能体ID')
+			return
+		}
+		
+		console.log(`[Cline] 代码智能体发送结果给计划智能体 (ID: ${this.plannerAgentId})`)
+		
+		try {
+			// 导入AgentManager
+			const { AgentManager } = await import("../agents/AgentManager")
+			const agentManager = AgentManager.getInstance()
+			
+			// 获取计划智能体
+			const plannerAgent = agentManager.getClineAgent(this.plannerAgentId)
+			if (!plannerAgent) {
+				console.error(`[Cline] 错误: 未找到计划智能体 (ID: ${this.plannerAgentId})`)
+				return
+			}
+			
+			// 向计划智能体发送消息
+			// 这里假设计划智能体有一个receiveCoderResult方法
+			if ('receiveCoderResult' in plannerAgent) {
+				await (plannerAgent as any).receiveCoderResult(this.taskId, result)
+			} else {
+				// 如果没有专门的方法，可以尝试发送用户消息
+				if ('startTask' in plannerAgent) {
+					const message = `[代码智能体结果] ${result}`
+					await agentManager.runAgentInSeparateThread(this.plannerAgentId, message)
+				}
+			}
+		} catch (error) {
+			console.error('[Cline] 发送结果给计划智能体时出错:', error)
+		}
+	}
+
+	/**
+	 * 接收代码智能体的结果
+	 * 仅适用于计划智能体
+	 * @param coderAgentId 代码智能体ID
+	 * @param result 任务结果
+	 */
+	async receiveCoderResult(coderAgentId: string, result: string): Promise<void> {
+		// 检查是否是计划智能体
+		if (this.agentType !== 'planner') {
+			console.warn('[Cline] 警告: 只有计划智能体可以接收代码智能体结果')
+			return
+		}
+		
+		console.log(`[Cline] 计划智能体接收到代码智能体 (ID: ${coderAgentId}) 的结果`)
+		
+		// 创建特殊的消息格式，表示这是来自代码智能体的结果
+		const message = `
+<coder_agent_result id="${coderAgentId}">
+${result}
+</coder_agent_result>
+`
+		
+		// 将结果作为特殊消息添加到对话中
+		await this.say("code_result", message)
+		
+		// 将结果传递给API，让模型能够继续对话
+		await this.initiateTaskLoop(
+			[
+				{
+					type: "text",
+					text: message,
+				},
+			],
+			false, // 不是新任务
+		)
 	}
 }

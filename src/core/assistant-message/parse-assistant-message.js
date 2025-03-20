@@ -60,41 +60,6 @@ export function parseAssistantMessage(assistantMessage) {
                         currentToolUse.params[contentParamName] = toolContent.slice(contentStartIndex, contentEndIndex).trim();
                     }
                 }
-                // 添加对create_coder_agent工具的参数处理
-                const taskDescParamName = "task_description";
-                const codeStyleParamName = "code_style";
-                const requirementsParamName = "requirements";
-                if (currentToolUse.name === "create_coder_agent") {
-                    const toolContent = accumulator.slice(currentToolUseStartIndex);
-                    // 处理task_description参数
-                    const taskDescStartTag = `<${taskDescParamName}>`;
-                    const taskDescEndTag = `</${taskDescParamName}>`;
-                    const taskDescStartIndex = toolContent.indexOf(taskDescStartTag) + taskDescStartTag.length;
-                    const taskDescEndIndex = toolContent.lastIndexOf(taskDescEndTag);
-                    if (taskDescStartIndex !== -1 && taskDescEndIndex !== -1 && taskDescEndIndex > taskDescStartIndex) {
-                        currentToolUse.params[taskDescParamName] = toolContent.slice(taskDescStartIndex, taskDescEndIndex).trim();
-                        console.log(`Found task_description: ${currentToolUse.params[taskDescParamName]}`);
-                    }
-                    // 处理code_style参数
-                    const codeStyleStartTag = `<${codeStyleParamName}>`;
-                    const codeStyleEndTag = `</${codeStyleParamName}>`;
-                    const codeStyleStartIndex = toolContent.indexOf(codeStyleStartTag) + codeStyleStartTag.length;
-                    const codeStyleEndIndex = toolContent.indexOf(codeStyleEndTag, codeStyleStartIndex);
-                    if (codeStyleStartIndex !== -1 && codeStyleEndIndex !== -1 && codeStyleEndIndex > codeStyleStartIndex) {
-                        currentToolUse.params[codeStyleParamName] = toolContent.slice(codeStyleStartIndex, codeStyleEndIndex).trim();
-                        console.log(`Found code_style: ${currentToolUse.params[codeStyleParamName]}`);
-                    }
-                    // 处理requirements参数
-                    const reqStartTag = `<${requirementsParamName}>`;
-                    const reqEndTag = `</${requirementsParamName}>`;
-                    const reqStartIndex = toolContent.indexOf(reqStartTag) + reqStartTag.length;
-                    const reqEndIndex = toolContent.indexOf(reqEndTag, reqStartIndex);
-                    if (reqStartIndex !== -1 && reqEndIndex !== -1 && reqEndIndex > reqStartIndex) {
-                        currentToolUse.params[requirementsParamName] = toolContent.slice(reqStartIndex, reqEndIndex).trim();
-                        console.log(`Found requirements: ${currentToolUse.params[requirementsParamName]}`);
-                    }
-                }
-                // partial tool value is accumulating
                 continue;
             }
         }

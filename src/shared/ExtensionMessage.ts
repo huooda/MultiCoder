@@ -157,6 +157,7 @@ export type ClineSay =
 	| "deleted_api_reqs"
 	| "clineignore_error"
 	| "checkpoint_created"
+	| "code_result"
 
 export interface ClineSayTool {
 	tool:
