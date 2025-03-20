@@ -145,6 +145,8 @@ export class Cline {
 		autoApprovalSettings: AutoApprovalSettings,
 		browserSettings: BrowserSettings,
 		chatSettings: ChatSettings,
+		agentType: 'planner' | 'coder' = 'planner',  // 添加智能体类型参数
+		plannerAgentId?: string,  // 添加计划智能体ID参数
 		customInstructions?: string,
 		task?: string,
 		images?: string[],
@@ -165,13 +167,24 @@ export class Cline {
 		this.autoApprovalSettings = autoApprovalSettings
 		this.browserSettings = browserSettings
 		this.chatSettings = chatSettings
+		
+		// 设置智能体类型
+		this.agentType = agentType
+		
+		// 如果是代码智能体，设置关联的计划智能体ID
+		if (agentType === 'coder' && plannerAgentId) {
+			this.plannerAgentId = plannerAgentId
+		}
+		
 		if (historyItem) {
 			this.taskId = historyItem.id
 			this.conversationHistoryDeletedRange = historyItem.conversationHistoryDeletedRange
-			this.resumeTaskFromHistory()
+			// 使用Promise异步执行任务恢复
+			Promise.resolve().then(() => this.resumeTaskFromHistory())
 		} else if (task || images) {
 			this.taskId = Date.now().toString()
-			this.startTask(task, images)
+			// 使用Promise异步执行任务启动
+			Promise.resolve().then(() => this.startTask(task, images))
 		} else {
 			throw new Error("Either historyItem or task/images must be provided")
 		}
@@ -1552,6 +1565,7 @@ export class Cline {
 
 		const block = cloneDeep(this.assistantMessageContent[this.currentStreamingContentIndex]) // need to create copy bc while stream is updating the array, it could be updating the reference block properties too
         //12345
+		console.log("block", block)
 		switch (block.type) {
 			case "text": {
 				if (this.didRejectTool || this.didAlreadyUseTool) {
