@@ -67,6 +67,22 @@ import { DEFAULT_LANGUAGE_SETTINGS, getLanguageKey, LanguageDisplay, LanguageKey
 import { telemetryService } from "../services/telemetry/TelemetryService"
 import pTimeout from "p-timeout"
 
+// 在Cline类之前添加辅助函数
+function formatCoderTask(taskDescription: string, codeStyle: string, requirements: string): string {
+	return `# 代码任务
+	
+## 任务描述
+${taskDescription}
+
+## 代码风格要求
+${codeStyle}
+
+## 技术要求
+${requirements}
+
+请按照以上要求完成任务。`;
+}
+
 // 添加removeClosingTag函数的定义
 /**
  * 移除参数值中的闭合标签
@@ -1802,7 +1818,37 @@ export class Cline {
 						
 						// 如果获得批准，创建代码智能体
 						if (approved) {
-							
+							try {
+								// 格式化任务描述，整合三个参数
+								const formattedTask = formatCoderTask(task_description, code_style, requirements);
+								
+								// 获取ClineProvider实例
+								const provider = this.providerRef.deref();
+								if (!provider) {
+									throw new Error("无法获取ClineProvider实例");
+								}
+								
+								// 创建coder智能体
+								const coderAgentId = await provider.createCoderAgent(formattedTask);
+								
+								// 发送成功消息
+								const successMessage = `已成功创建代码智能体（ID: ${coderAgentId}）。该智能体将在新标签页中显示。`;
+								await this.say("text", successMessage);
+								
+								// 将工具结果添加到userMessageContent
+								pushToolResult([{
+									type: "text",
+									text: successMessage,
+								}]);
+								
+								// 通知用户界面刷新状态
+								await provider.postStateToWebview();
+							} catch (error) {
+								// 错误处理
+								const errorMessage = `创建代码智能体失败: ${error instanceof Error ? error.message : String(error)}`;
+								await this.say("error", errorMessage);
+								pushToolResult(formatResponse.toolError(errorMessage));
+							}
 						}
 					} catch (error) {
 						await handleError("创建代码智能体", error instanceof Error ? error : new Error(String(error)))

@@ -122,6 +122,7 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 	private disposables: vscode.Disposable[] = []
 	private view?: vscode.WebviewView | vscode.WebviewPanel
 	private planner?: Cline
+	private coder?: Cline  // 添加coder属性
 	workspaceTracker?: WorkspaceTracker
 	mcpHub?: McpHub
 	private latestAnnouncementId = "feb-19-2025" // update to some unique identifier when we add a new announcement
@@ -1869,7 +1870,7 @@ Here is the project's README to help you get started:\n\n${mcpDetails.readmeCont
 			uriScheme: vscode.env.uriScheme,
 			currentTaskItem: this.planner?.taskId ? (taskHistory || []).find((item) => item.id === this.planner?.taskId) : undefined,
 			checkpointTrackerErrorMessage: this.planner?.checkpointTrackerErrorMessage,
-			plannerMessages: this.planner?.clineMessages || [],
+			clineMessages: this.planner?.clineMessages || [],
 			coderMessages: this.coder?.clineMessages || [],
 			taskHistory: (taskHistory || [])
 				.filter((item) => item.ts && item.task)
@@ -2316,6 +2317,26 @@ Here is the project's README to help you get started:\n\n${mcpDetails.readmeCont
 			type: "action",
 			action: "chatButtonClicked",
 		})
+	}
+
+	// 添加创建coder智能体的方法
+	async createCoderAgent(formattedTask: string): Promise<string> {
+		const { apiConfiguration, customInstructions, autoApprovalSettings, browserSettings, chatSettings } = await this.getState();
+		
+		// 创建一个新的Cline实例，指定agentType为'coder'
+		this.coder = new Cline(
+			this,
+			apiConfiguration,
+			autoApprovalSettings,
+			browserSettings,
+			chatSettings,
+			'coder',  // 设置agentType为'coder'
+			customInstructions,
+			formattedTask // 使用合并后的完整任务
+		);
+		
+		// 返回coder的taskId
+		return this.coder.taskId;
 	}
 
 }

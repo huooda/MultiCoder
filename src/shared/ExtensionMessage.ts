@@ -85,6 +85,7 @@ export interface ExtensionState {
 	currentTaskItem?: HistoryItem
 	checkpointTrackerErrorMessage?: string
 	clineMessages: ClineMessage[]
+	coderMessages: ClineMessage[]
 	taskHistory: HistoryItem[]
 	shouldShowAnnouncement: boolean
 	autoApprovalSettings: AutoApprovalSettings

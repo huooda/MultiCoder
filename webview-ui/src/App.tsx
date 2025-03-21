@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react"
 import { useEvent } from "react-use"
 import { ExtensionMessage } from "../../src/shared/ExtensionMessage"
 import ChatView from "./components/chat/ChatView"
+import AgentTabs from "./components/chat/AgentTabs"
 import HistoryView from "./components/history/HistoryView"
 import SettingsView from "./components/settings/SettingsView"
 import WelcomeView from "./components/welcome/WelcomeView"
@@ -92,17 +93,14 @@ const AppContent = () => {
 					{showMcp && <McpView onDone={() => setShowMcp(false)} />}
 					{showAccount && <AccountView onDone={() => setShowAccount(false)} />}
 					{/* Do not conditionally load ChatView, it's expensive and there's state we don't want to lose (user input, disableInput, askResponse promise, etc.) */}
-					<ChatView
+					<AgentTabs
 						showHistoryView={() => {
 							setShowSettings(false)
 							setShowMcp(false)
 							setShowHistory(true)
 						}}
-						isHidden={showSettings || showHistory || showMcp || showAccount}
 						showAnnouncement={showAnnouncement}
-						hideAnnouncement={() => {
-							setShowAnnouncement(false)
-						}}
+						setShowAnnouncement={setShowAnnouncement}
 					/>
 				</>
 			)}
