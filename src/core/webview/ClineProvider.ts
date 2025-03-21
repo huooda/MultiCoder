@@ -35,9 +35,6 @@ import { getUri } from "./getUri"
 import { telemetryService } from "../../services/telemetry/TelemetryService"
 import { TelemetrySetting } from "../../shared/TelemetrySetting"
 import { cleanupLegacyCheckpoints } from "../../integrations/checkpoints/CheckpointMigration"
-import CheckpointTracker from "../../integrations/checkpoints/CheckpointTracker"
-import type { AgentType } from '../../agents/types';
-
 /*
 https://github.com/microsoft/vscode-webview-ui-toolkit-samples/blob/main/default/weather-webview/src/providers/WeatherViewProvider.ts
 
@@ -292,7 +289,6 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 				browserSettings,
 				chatSettings,
 				'planner',   // 默认为计划智能体
-				undefined,   // 没有关联的计划智能体
 				customInstructions,
 				task,        // 直接传入任务
 				images       // 直接传入图片
@@ -311,7 +307,6 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			browserSettings,
 			chatSettings,
 			'planner',  // 固定使用计划智能体类型
-			undefined,  // 不需要计划智能体ID
 			customInstructions,
 			undefined,  // 不传递任务
 			undefined,  // 不传递图片
@@ -1874,7 +1869,8 @@ Here is the project's README to help you get started:\n\n${mcpDetails.readmeCont
 			uriScheme: vscode.env.uriScheme,
 			currentTaskItem: this.planner?.taskId ? (taskHistory || []).find((item) => item.id === this.planner?.taskId) : undefined,
 			checkpointTrackerErrorMessage: this.planner?.checkpointTrackerErrorMessage,
-			clineMessages: this.planner?.clineMessages || [],
+			plannerMessages: this.planner?.clineMessages || [],
+			coderMessages: this.coder?.clineMessages || [],
 			taskHistory: (taskHistory || [])
 				.filter((item) => item.ts && item.task)
 				.sort((a, b) => b.ts - a.ts)
@@ -2322,51 +2318,4 @@ Here is the project's README to help you get started:\n\n${mcpDetails.readmeCont
 		})
 	}
 
-	/**
-	 * 创建代码智能体，由计划智能体发起
-	 * @param plannerAgentId 计划智能体ID
-	 * @param task 代码智能体的任务
-	 * @param images 可选的图片
-	 * @returns 代码智能体ID
-	 */
-	async createCoderAgent(plannerAgentId: string, task: string, images?: string[]): Promise<string> {
-		try {
-			// 获取当前状态，包含所有必要配置
-			const { apiConfiguration, customInstructions, autoApprovalSettings, browserSettings } =
-				await this.getState()
-			
-			// 导入和获取AgentManager
-			const { AgentManager } = await import("../../agents/AgentManager")
-			const agentManager = AgentManager.getInstance()
-			
-			// 确保AgentManager已初始化
-			if (!agentManager.isInitialized) {
-				console.log('[ClineProvider] 正在初始化AgentManager...')
-				await agentManager.initialize(this.context, apiConfiguration, browserSettings)
-				console.log('[ClineProvider] AgentManager初始化完成')
-			}
-			
-			// 直接创建一个Cline实例作为代码智能体
-			const cline = new Cline(
-				this,
-				apiConfiguration,
-				autoApprovalSettings,
-				browserSettings,
-				{ mode: "act" }, // 代码智能体使用act模式
-				'coder',  // 指定为代码智能体
-				undefined, // 不使用plannerAgentId
-				customInstructions,
-				task,     // 直接传入任务
-				images    // 直接传入图片
-			)
-			
-			console.log(`[ClineProvider] 创建代码智能体 (ID: ${cline.taskId.substring(0, 8)})`)
-			
-			return cline.taskId
-			
-		} catch (error) {
-			console.error('[ClineProvider] 创建代码智能体失败:', error)
-			throw error
-		}
-	}
 }

@@ -123,9 +123,6 @@ export class Cline {
 	// 智能体类型：planner(计划智能体)或coder(代码智能体)
 	private agentType: 'planner' | 'coder' = 'planner'
 	
-	// 如果是代码智能体，存储关联的计划智能体ID
-	private plannerAgentId?: string
-
 	// streaming
 	isWaitingForFirstChunk = false
 	isStreaming = false
@@ -147,7 +144,6 @@ export class Cline {
 		browserSettings: BrowserSettings,
 		chatSettings: ChatSettings,
 		agentType: 'planner' | 'coder' = 'planner',  // 添加智能体类型参数
-		plannerAgentId?: string,  // 添加计划智能体ID参数
 		customInstructions?: string,
 		task?: string,
 		images?: string[],
@@ -173,10 +169,6 @@ export class Cline {
 		this.agentType = agentType
 		
 		// 如果是代码智能体，设置关联的计划智能体ID
-		if (agentType === 'coder' && plannerAgentId) {
-			this.plannerAgentId = plannerAgentId
-		}
-		
 		if (historyItem) {
 			this.taskId = historyItem.id
 			this.conversationHistoryDeletedRange = historyItem.conversationHistoryDeletedRange
@@ -207,43 +199,8 @@ export class Cline {
 	updateChatSettings(chatSettings: ChatSettings) {
 		this.chatSettings = chatSettings
 	}
-	
-	/**
-	 * 设置智能体类型
-	 * @param type 智能体类型：'planner'(计划智能体)或'coder'(代码智能体)
-	 */
-	setAgentType(type: 'planner' | 'coder') {
-		this.agentType = type
-		console.log(`[Cline] 设置智能体类型: ${type}`)
-	}
-	
-	/**
-	 * 获取当前智能体类型
-	 * @returns 当前智能体类型
-	 */
-	getAgentType(): 'planner' | 'coder' {
-		return this.agentType
-	}
-	
-	/**
-	 * 设置关联的计划智能体ID（代码智能体使用）
-	 * @param agentId 计划智能体ID
-	 */
-	setPlannerAgentId(agentId: string) {
-		this.plannerAgentId = agentId
-		console.log(`[Cline] 设置关联的计划智能体ID: ${agentId}`)
-	}
-	
-	/**
-	 * 获取关联的计划智能体ID
-	 * @returns 计划智能体ID，如果未设置则返回undefined
-	 */
-	getPlannerAgentId(): string | undefined {
-		return this.plannerAgentId
-	}
 
-	// Storing task to disk for history
-
+	
 	private async ensureTaskDirectoryExists(): Promise<string> {
 		const globalStoragePath = this.providerRef.deref()?.context.globalStorageUri.fsPath
 		if (!globalStoragePath) {
@@ -920,10 +877,6 @@ export class Cline {
 	 * 由计划智能体触发，处理特定的代码编写或修改任务
 	 */
 	private async startCoderTask(task?: string, images?: string[]): Promise<void> {
-		// 确保有关联的计划智能体ID
-		if (!this.plannerAgentId) {
-			console.warn('[Cline] 警告: 代码智能体没有关联的计划智能体ID')
-		}
 		
 		let imageBlocks: Anthropic.ImageBlockParam[] = formatResponse.imageBlocks(images)
 		
@@ -1849,84 +1802,7 @@ export class Cline {
 						
 						// 如果获得批准，创建代码智能体
 						if (approved) {
-							try {
-								// 导入AgentManager
-								const { AgentManager } = await import("../agents/AgentManager")
-								const agentManager = AgentManager.getInstance()
-								
-								// 确保AgentManager已初始化
-								if (!agentManager.isInitialized) {
-									// 获取扩展上下文
-									const provider = this.providerRef.deref()
-									if (!provider) {
-										throw new Error("无法获取ClineProvider实例")
-									}
-									
-									// 创建API配置
-									const apiConfiguration: ApiConfiguration = {
-										apiProvider: this.apiProvider as ApiProvider,
-										apiKey: this.api.getModel().id // 使用模型ID作为apiKey
-									}
-									
-									// 初始化AgentManager
-									agentManager.initialize(provider.context, apiConfiguration, this.browserSettings)
-								}
-								
-								// 创建代码智能体
-								const coderAgentId = await agentManager.createCoderAgent({
-									plannerAgentId: this.taskId,
-									taskSpec: {
-										taskDescription: task_description,
-										codeStyle: code_style,
-										requirements: requirements
-									}
-								})
-								
-								// 完整的消息属性
-								const completeMessageProps = {
-									tool: "create_coder_agent",
-									task_description: task_description,
-									code_style: code_style,
-									requirements: requirements,
-									result: `代码智能体已创建，ID: ${coderAgentId.substring(0, 8)}`
-								}
-								
-								// 更新UI消息
-								const completeMessage = JSON.stringify(completeMessageProps)
-								
-								// 如果之前有显示部分消息，现在替换为完整消息
-								this.removeLastPartialMessageIfExistsWithType("ask", "tool")
-								this.removeLastPartialMessageIfExistsWithType("say", "tool")
-								
-								// 显示完整消息
-								await this.say("tool", completeMessage, undefined, false)
-								
-								// 记录工具使用情况
-								telemetryService.captureToolUsage(this.taskId, block.name, false, true)
-								
-								// 向用户显示通知，显示完整任务描述
-								await this.say(
-									"text",
-									`已创建代码智能体来处理任务："${task_description}"`
-								)
-								
-								// 返回工具执行结果
-								pushToolResult(
-									formatResponse.toolResult(
-											`代码智能体已创建，ID: ${coderAgentId.substring(0, 8)}。该智能体将在独立任务队列中工作，完成后会向你报告结果。`
-										)
-								)
-								
-								// 保存检查点
-								await this.saveCheckpoint()
-							} catch (error) {
-								// 处理AgentManager相关错误
-								pushToolResult(
-										formatResponse.toolError(
-											`创建代码智能体失败: ${error instanceof Error ? error.message : String(error)}`
-										)
-									)
-							}
+							
 						}
 					} catch (error) {
 						await handleError("创建代码智能体", error instanceof Error ? error : new Error(String(error)))
@@ -3892,48 +3768,6 @@ export class Cline {
 	 * 仅适用于代码智能体
 	 * @param result 任务结果
 	 */
-	async sendResultToPlannerAgent(result: string): Promise<void> {
-		// 检查是否是代码智能体
-		if (this.agentType !== 'coder') {
-			console.warn('[Cline] 警告: 只有代码智能体可以发送结果给计划智能体')
-			return
-		}
-		
-		// 检查是否设置了关联的计划智能体ID
-		if (!this.plannerAgentId) {
-			console.error('[Cline] 错误: 代码智能体没有关联的计划智能体ID')
-			return
-		}
-		
-		console.log(`[Cline] 代码智能体发送结果给计划智能体 (ID: ${this.plannerAgentId})`)
-		
-		try {
-			// 导入AgentManager
-			const { AgentManager } = await import("../agents/AgentManager")
-			const agentManager = AgentManager.getInstance()
-			
-			// 获取计划智能体
-			const plannerAgent = agentManager.getClineAgent(this.plannerAgentId)
-			if (!plannerAgent) {
-				console.error(`[Cline] 错误: 未找到计划智能体 (ID: ${this.plannerAgentId})`)
-				return
-			}
-			
-			// 向计划智能体发送消息
-			// 这里假设计划智能体有一个receiveCoderResult方法
-			if ('receiveCoderResult' in plannerAgent) {
-				await (plannerAgent as any).receiveCoderResult(this.taskId, result)
-			} else {
-				// 如果没有专门的方法，可以尝试发送用户消息
-				if ('startTask' in plannerAgent) {
-					const message = `[代码智能体结果] ${result}`
-					await agentManager.runAgentInSeparateThread(this.plannerAgentId, message)
-				}
-			}
-		} catch (error) {
-			console.error('[Cline] 发送结果给计划智能体时出错:', error)
-		}
-	}
 
 	/**
 	 * 接收代码智能体的结果
