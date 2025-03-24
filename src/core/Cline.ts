@@ -137,7 +137,7 @@ export class Cline {
 	didRespondToPlanAskBySwitchingMode = false
 	
 	// 智能体类型：planner(计划智能体)或coder(代码智能体)
-	private agentType: 'planner' | 'coder' = 'planner'
+	private agentType?: string
 	
 	// streaming
 	isWaitingForFirstChunk = false
@@ -159,7 +159,7 @@ export class Cline {
 		autoApprovalSettings: AutoApprovalSettings,
 		browserSettings: BrowserSettings,
 		chatSettings: ChatSettings,
-		agentType: 'planner' | 'coder' = 'planner',  // 添加智能体类型参数
+		agentType?: string,
 		customInstructions?: string,
 		task?: string,
 		images?: string[],
@@ -316,6 +316,7 @@ export class Cline {
 				cacheReads: apiMetrics.totalCacheReads,
 				totalCost: apiMetrics.totalCost,
 				size: taskDirSize,
+				agentType: this.agentType,
 				shadowGitConfigWorkTree: await this.checkpointTracker?.getShadowGitConfigWorkTree(),
 				conversationHistoryDeletedRange: this.conversationHistoryDeletedRange,
 			})

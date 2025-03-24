@@ -123,6 +123,7 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 	private view?: vscode.WebviewView | vscode.WebviewPanel
 	private planner?: Cline
 	private coder?: Cline  // 添加coder属性
+	private agents: string[] = []
 	workspaceTracker?: WorkspaceTracker
 	mcpHub?: McpHub
 	private latestAnnouncementId = "feb-19-2025" // update to some unique identifier when we add a new announcement
@@ -283,6 +284,7 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 		await this.clearTask()
 			const { apiConfiguration, customInstructions, autoApprovalSettings, browserSettings, chatSettings } =
 				await this.getState()
+			this.agents = []
 			this.planner = new Cline(
 				this,
 				apiConfiguration,
@@ -294,6 +296,9 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 				task,        // 直接传入任务
 				images       // 直接传入图片
 			)
+			if (!this.agents.includes(this.planner.taskId)) {
+				this.agents.push(this.planner.taskId);
+			}
 		}
 
 	async initClineWithHistoryItem(historyItem: HistoryItem) {
@@ -307,7 +312,7 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			autoApprovalSettings,
 			browserSettings,
 			chatSettings,
-			'planner',  // 固定使用计划智能体类型
+			historyItem.agentType,
 			customInstructions,
 			undefined,  // 不传递任务
 			undefined,  // 不传递图片
@@ -1089,7 +1094,7 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 				// 'abandoned' will prevent this cline instance from affecting future cline instance gui. this may happen if its hanging on a streaming request
 				this.planner.abandoned = true
 			}
-			await this.initClineWithHistoryItem(historyItem) // clears task again, so we need to abortTask manually above
+			await this.initAgentsWithHistoryItem(historyItem) // clears task again, so we need to abortTask manually above
 			// await this.postStateToWebview() // new Cline instance will post state when it's ready. having this here sent an empty messages array to webview leading to virtuoso having to reload the entire list
 		}
 	}
@@ -1754,14 +1759,17 @@ Here is the project's README to help you get started:\n\n${mcpDetails.readmeCont
 
 	async showTaskWithId(id: string) {
 		if (id !== this.planner?.taskId) {
-			// non-current task
-			const { historyItem } = await this.getTaskWithId(id)
-			await this.initClineWithHistoryItem(historyItem) // clears existing task
+			// 非当前任务
+			const { historyItem } = await this.getTaskWithId(id);
+			// 使用新的方法初始化智能体
+			await this.initAgentsWithHistoryItem(historyItem);
 		}
+		
+		// 通知webview切换到聊天视图
 		await this.postMessageToWebview({
 			type: "action",
 			action: "chatButtonClicked",
-		})
+		});
 	}
 
 	async exportTaskWithId(id: string) {
@@ -1867,7 +1875,7 @@ Here is the project's README to help you get started:\n\n${mcpDetails.readmeCont
 			version: this.context.extension?.packageJSON?.version ?? "",
 			apiConfiguration,
 			customInstructions,
-			uriScheme: vscode.env.uriScheme,
+				uriScheme: vscode.env.uriScheme,
 			currentTaskItem: this.planner?.taskId ? (taskHistory || []).find((item) => item.id === this.planner?.taskId) : undefined,
 			checkpointTrackerErrorMessage: this.planner?.checkpointTrackerErrorMessage,
 			clineMessages: this.planner?.clineMessages || [],
@@ -2175,6 +2183,18 @@ Here is the project's README to help you get started:\n\n${mcpDetails.readmeCont
 	}
 
 	async updateTaskHistory(item: HistoryItem): Promise<HistoryItem[]> {
+		// 如果item没有agents，使用当前的agents
+		if (!item.agents || item.agents.length === 0) {
+			item.agents = [...this.agents];
+		} else {
+			// 合并现有agents和当前agents，确保不重复
+			this.agents.forEach(agentId => {
+				if (!item.agents!.includes(agentId)) {
+					item.agents!.push(agentId);
+				}
+			});
+		}
+		
 		const history = ((await this.getGlobalState("taskHistory")) as HistoryItem[]) || []
 		const existingItemIndex = history.findIndex((h) => h.id === item.id)
 		if (existingItemIndex !== -1) {
@@ -2334,9 +2354,37 @@ Here is the project's README to help you get started:\n\n${mcpDetails.readmeCont
 			customInstructions,
 			formattedTask // 使用合并后的完整任务
 		);
-		
+		if (!this.agents.includes(this.coder.taskId)) {
+			this.agents.push(this.coder.taskId);
+		}
 		// 返回coder的taskId
 		return this.coder.taskId;
+	}
+
+	// 添加这个新函数
+	async initAgentsWithHistoryItem(historyItem: HistoryItem) {
+		await this.clearTask(); // 首先清除当前任务
+		// 将主智能体ID添加到agents数组
+		this.agents = historyItem.agents || []
+		if (!this.agents.includes(historyItem.id)) {
+			this.agents.push(historyItem.id);
+		}
+		
+		// 检查并初始化关联智能体
+		if (historyItem.agents && historyItem.agents.length > 0) {
+			// 遍历agents数组中的每个智能体ID
+			for (const agentId of historyItem.agents) {
+				try {
+					
+					// 获取关联智能体的历史记录
+					const { historyItem: agentHistoryItem } = await this.getTaskWithId(agentId);
+					
+					this.initClineWithHistoryItem(agentHistoryItem)
+				} catch (error) {
+					console.error(`Failed to initialize agent ${agentId}:`, error);
+				}
+			}
+		}
 	}
 
 }

@@ -39,7 +39,7 @@ export interface AgentTabsProps {
 }
 
 const AgentTabs: React.FC<AgentTabsProps> = (props) => {
-  const { clineMessages, coderMessages } = useExtensionState();
+  const { clineMessages, coderMessages, coderCreated, agentRelationships } = useExtensionState();
   const [selectedTab, setSelectedTab] = useState<'planner' | 'coder'>('planner');
   
   // 自动切换到有内容的标签页
@@ -56,8 +56,11 @@ const AgentTabs: React.FC<AgentTabsProps> = (props) => {
   const showAnnouncement = props.showAnnouncement || false;
   const hideAnnouncement = props.setShowAnnouncement ? () => props.setShowAnnouncement!(false) : () => {};
   
-  // 只有在coderMessages不为空时才显示标签页
-  const showTabs = coderMessages.length > 0;
+  // 判断是否显示标签页：
+  // 1. coderCreated标志为true或
+  // 2. 当前任务存在关联的代码智能体ID
+  const showTabs = coderCreated === true || 
+                  (agentRelationships?.currentCoderIds && agentRelationships.currentCoderIds.length > 0);
   
   if (!showTabs) {
     // 如果coder没有消息，直接显示planner消息
