@@ -51,8 +51,10 @@ const AgentTabs: React.FC<AgentTabsProps> = (props) => {
     }
   }, [clineMessages, coderMessages, selectedTab]);
   
-  // 获取当前标签页的消息
-  const currentMessages = selectedTab === 'planner' ? clineMessages : coderMessages;
+  // 提供默认值，确保类型匹配
+  const showHistoryView = props.showHistoryView || (() => {});
+  const showAnnouncement = props.showAnnouncement || false;
+  const hideAnnouncement = props.setShowAnnouncement ? () => props.setShowAnnouncement!(false) : () => {};
   
   // 只有在coderMessages不为空时才显示标签页
   const showTabs = coderMessages.length > 0;
@@ -61,10 +63,11 @@ const AgentTabs: React.FC<AgentTabsProps> = (props) => {
     // 如果coder没有消息，直接显示planner消息
     return (
       <ChatView 
-        messages={clineMessages} 
-        showHistoryView={props.showHistoryView}
-        showAnnouncement={props.showAnnouncement}
-        setShowAnnouncement={props.setShowAnnouncement}
+        isHidden={false}
+        showHistoryView={showHistoryView}
+        showAnnouncement={showAnnouncement}
+        hideAnnouncement={hideAnnouncement}
+        messageSource="planner"
       />
     );
   }
@@ -87,10 +90,11 @@ const AgentTabs: React.FC<AgentTabsProps> = (props) => {
       </TabsHeader>
       <TabContent>
         <ChatView 
-          messages={currentMessages}
-          showHistoryView={props.showHistoryView}
-          showAnnouncement={props.showAnnouncement}
-          setShowAnnouncement={props.setShowAnnouncement}
+          isHidden={false}
+          showHistoryView={showHistoryView}
+          showAnnouncement={showAnnouncement}
+          hideAnnouncement={hideAnnouncement}
+          messageSource={selectedTab}
         />
       </TabContent>
     </TabsContainer>

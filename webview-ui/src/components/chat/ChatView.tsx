@@ -33,12 +33,16 @@ interface ChatViewProps {
 	showAnnouncement: boolean
 	hideAnnouncement: () => void
 	showHistoryView: () => void
+	messageSource?: 'planner' | 'coder'  // 添加可选的消息源参数
 }
 
 export const MAX_IMAGES_PER_MESSAGE = 20 // Anthropic limits to 20 images
 
-const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryView }: ChatViewProps) => {
-	const { version, clineMessages: messages, taskHistory, apiConfiguration, telemetrySetting } = useExtensionState()
+const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryView, messageSource = 'planner' }: ChatViewProps) => {
+	const { version, clineMessages, coderMessages, taskHistory, apiConfiguration, telemetrySetting } = useExtensionState()
+	
+	// 根据消息源选择使用哪组消息
+	const messages = messageSource === 'planner' ? clineMessages : coderMessages
 
 	//const task = messages.length > 0 ? (messages[0].say === "task" ? messages[0] : undefined) : undefined) : undefined
 	const task = useMemo(() => messages.at(0), [messages]) // leaving this less safe version here since if the first message is not a task, then the extension is in a bad state and needs to be debugged (see Cline.abort)
@@ -795,7 +799,7 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 					{showAnnouncement && <Announcement version={version} hideAnnouncement={hideAnnouncement} />}
 
 					<div style={{ padding: "0 20px", flexShrink: 0 }}>
-						<h2>What can I do for you?123</h2>
+						<h2>What can I do for you?12345</h2>
 						<p>
 							Thanks to{" "}
 							<VSCodeLink href="https://www.anthropic.com/claude/sonnet" style={{ display: "inline" }}>
