@@ -2,7 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useExtensionState } from '../../context/ExtensionStateContext';
 import styled from 'styled-components';
 import ChatView from './ChatView';
+import { vscode } from '../../utils/vscode';
 
+// 容器组件，使用flex布局
 const TabsContainer = styled.div`
   display: flex;
   flex-direction: column;
@@ -10,6 +12,7 @@ const TabsContainer = styled.div`
   position: relative;
 `;
 
+// 标签头部，固定在顶部
 const TabsHeader = styled.div`
   display: flex;
   background-color: var(--vscode-editorGroupHeader-tabsBackground);
@@ -27,6 +30,7 @@ const TabsHeader = styled.div`
   }
 `;
 
+// 标签按钮
 const TabButton = styled.button<{ isActive: boolean }>`
   background: ${props => props.isActive ? 'var(--vscode-tab-activeBackground)' : 'var(--vscode-tab-inactiveBackground)'};
   color: ${props => props.isActive ? 'var(--vscode-tab-activeForeground)' : 'var(--vscode-tab-inactiveForeground)'};
@@ -46,6 +50,7 @@ const TabButton = styled.button<{ isActive: boolean }>`
   }
 `;
 
+// 内容区域
 const TabContent = styled.div`
   flex: 1;
   overflow: auto;
@@ -73,13 +78,15 @@ const MessageCount = styled.span`
   justify-content: center;
 `;
 
+// 组件属性接口
 export interface AgentTabsProps {
   showHistoryView?: () => void;
   showAnnouncement?: boolean;
   hideAnnouncement?: () => void;
+  isHidden?: boolean;
 }
 
-// 智能体类型定义
+// 智能体标签接口
 interface AgentTab {
   id: string;
   name: string;
@@ -92,8 +99,8 @@ const AgentTabs: React.FC<AgentTabsProps> = (props) => {
   const extensionState = useExtensionState();
   const { clineMessages, coderMessages } = extensionState;
   const [selectedTabId, setSelectedTabId] = useState<'planner' | 'coder'>('planner');
-  
-  // 添加调试输出
+
+  // 调试输出
   useEffect(() => {
     console.log('ExtensionState:', {
       selectedTab: selectedTabId,
@@ -102,7 +109,7 @@ const AgentTabs: React.FC<AgentTabsProps> = (props) => {
       fullState: extensionState
     });
   }, [selectedTabId, clineMessages, coderMessages, extensionState]);
-  
+
   // 固定的标签页配置
   const tabs: AgentTab[] = [
     { 
@@ -120,21 +127,13 @@ const AgentTabs: React.FC<AgentTabsProps> = (props) => {
       messageCount: coderMessages.length
     }
   ];
-  
-  // 自动切换到有内容的标签页
-  useEffect(() => {
-    if (selectedTabId === 'planner' && clineMessages.length === 0 && coderMessages.length > 0) {
-      setSelectedTabId('coder');
-    } else if (selectedTabId === 'coder' && coderMessages.length === 0 && clineMessages.length > 0) {
-      setSelectedTabId('planner');
-    }
-  }, [clineMessages, coderMessages, selectedTabId]);
-  
-  // 提供默认值，确保类型匹配
+
+
+  // 提供默认值
   const showHistoryView = props.showHistoryView || (() => {});
   const showAnnouncement = props.showAnnouncement || false;
   const hideAnnouncement = props.hideAnnouncement || (() => {});
-  
+
   return (
     <TabsContainer>
       <TabsHeader>
@@ -154,7 +153,7 @@ const AgentTabs: React.FC<AgentTabsProps> = (props) => {
       </TabsHeader>
       <TabContent>
         <ChatView 
-          isHidden={false}
+          isHidden={props.isHidden || false}
           showHistoryView={showHistoryView}
           showAnnouncement={showAnnouncement}
           hideAnnouncement={hideAnnouncement}

@@ -33,7 +33,7 @@ interface ChatViewProps {
 	showAnnouncement: boolean
 	hideAnnouncement: () => void
 	showHistoryView: () => void
-	messageSource?: 'planner' | 'coder'  // 添加可选的消息源参数
+	messageSource?: 'planner' | 'coder'
 }
 
 export const MAX_IMAGES_PER_MESSAGE = 20 // Anthropic limits to 20 images
@@ -41,8 +41,8 @@ export const MAX_IMAGES_PER_MESSAGE = 20 // Anthropic limits to 20 images
 const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryView, messageSource = 'planner' }: ChatViewProps) => {
 	const { version, clineMessages, coderMessages, taskHistory, apiConfiguration, telemetrySetting } = useExtensionState()
 	
-	// 根据消息源选择使用哪组消息
-	const messages = messageSource === 'planner' ? clineMessages : coderMessages
+	// 根据messageSource选择要显示的消息
+	const messages = messageSource === 'planner' ? clineMessages : coderMessages;
 
 	//const task = messages.length > 0 ? (messages[0].say === "task" ? messages[0] : undefined) : undefined) : undefined
 	const task = useMemo(() => messages.at(0), [messages]) // leaving this less safe version here since if the first message is not a task, then the extension is in a bad state and needs to be debugged (see Cline.abort)
@@ -799,7 +799,7 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 					{showAnnouncement && <Announcement version={version} hideAnnouncement={hideAnnouncement} />}
 
 					<div style={{ padding: "0 20px", flexShrink: 0 }}>
-						<h2>What can I do for you?12345</h2>
+						<h2>What can I do for you?</h2>
 						<p>
 							Thanks to{" "}
 							<VSCodeLink href="https://www.anthropic.com/claude/sonnet" style={{ display: "inline" }}>
@@ -815,17 +815,17 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 				</div>
 			)}
 
-			{/* 
+			{/*
 			// Flex layout explanation:
 			// 1. Content div above uses flex: "1 1 0" to:
-			//    - Grow to fill available space (flex-grow: 1) 
+			//    - Grow to fill available space (flex-grow: 1)
 			//    - Shrink when AutoApproveMenu needs space (flex-shrink: 1)
 			//    - Start from zero size (flex-basis: 0) to ensure proper distribution
 			//    minHeight: 0 allows it to shrink below its content height
 			//
 			// 2. AutoApproveMenu uses flex: "0 1 auto" to:
 			//    - Not grow beyond its content (flex-grow: 0)
-			//    - Shrink when viewport is small (flex-shrink: 1) 
+			//    - Shrink when viewport is small (flex-shrink: 1)
 			//    - Use its content size as basis (flex-basis: auto)
 			//    This ensures it takes its natural height when there's space
 			//    but becomes scrollable when the viewport is too small

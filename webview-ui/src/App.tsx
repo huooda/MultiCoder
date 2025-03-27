@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react"
 import { useEvent } from "react-use"
 import { ExtensionMessage } from "../../src/shared/ExtensionMessage"
-import ChatView from "./components/chat/ChatView"
 import AgentTabs from "./components/chat/AgentTabs"
 import HistoryView from "./components/history/HistoryView"
 import SettingsView from "./components/settings/SettingsView"
@@ -92,7 +91,7 @@ const AppContent = () => {
 					{showHistory && <HistoryView onDone={() => setShowHistory(false)} />}
 					{showMcp && <McpView onDone={() => setShowMcp(false)} />}
 					{showAccount && <AccountView onDone={() => setShowAccount(false)} />}
-					{/* Do not conditionally load ChatView, it's expensive and there's state we don't want to lose (user input, disableInput, askResponse promise, etc.) */}
+					{/* Do not conditionally load AgentTabs, it's expensive and there's state we don't want to lose */}
 					<AgentTabs
 						showHistoryView={() => {
 							setShowSettings(false)

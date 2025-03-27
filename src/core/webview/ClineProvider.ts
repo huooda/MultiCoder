@@ -1915,6 +1915,8 @@ Here is the project's README to help you get started:\n\n${mcpDetails.readmeCont
 
 	async clearTask() {
 		this.planner?.abortTask()
+		this.coder?.abortTask()
+		this.coder = undefined
 		this.planner = undefined // removes reference to it, so once promises end it will be garbage collected
 	}
 
