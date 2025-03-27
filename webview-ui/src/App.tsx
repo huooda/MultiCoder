@@ -100,7 +100,7 @@ const AppContent = () => {
 							setShowHistory(true)
 						}}
 						showAnnouncement={showAnnouncement}
-						setShowAnnouncement={setShowAnnouncement}
+						hideAnnouncement={() => setShowAnnouncement(false)}
 					/>
 				</>
 			)}

@@ -306,19 +306,36 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 		const { apiConfiguration, customInstructions, autoApprovalSettings, browserSettings, chatSettings } =
 			await this.getState()
 		// 回退到直接创建Cline实例
-		this.planner = new Cline(
-			this,
-			apiConfiguration,
-			autoApprovalSettings,
-			browserSettings,
-			chatSettings,
-			historyItem.agentType,
-			customInstructions,
-			undefined,  // 不传递任务
-			undefined,  // 不传递图片
-			historyItem  // 传递历史记录
+		if (historyItem.agentType === "planner") {
+			this.planner = new Cline(
+				this,
+				apiConfiguration,
+				autoApprovalSettings,
+				browserSettings,
+				chatSettings,
+				historyItem.agentType,
+				customInstructions,
+				undefined,  // 不传递任务
+				undefined,  // 不传递图片
+				historyItem  // 传递历史记录
 			)
 		}
+		if (historyItem.agentType === "coder") {
+			this.coder = new Cline(
+				this,
+				apiConfiguration,
+				autoApprovalSettings,
+				browserSettings,
+				chatSettings,
+				historyItem.agentType,
+				customInstructions,
+				undefined,  // 不传递任务
+				undefined,  // 不传递图片
+				historyItem  // 传递历史记录
+			)
+		}
+
+	}
 
 	// Send any JSON serializable data to the react app
 	async postMessageToWebview(message: ExtensionMessage) {
@@ -1870,7 +1887,6 @@ Here is the project's README to help you get started:\n\n${mcpDetails.readmeCont
 			telemetrySetting,
 			planActSeparateModelsSetting,
 		} = await this.getState()
-
 		return {
 			version: this.context.extension?.packageJSON?.version ?? "",
 			apiConfiguration,
@@ -1881,7 +1897,7 @@ Here is the project's README to help you get started:\n\n${mcpDetails.readmeCont
 			clineMessages: this.planner?.clineMessages || [],
 			coderMessages: this.coder?.clineMessages || [],
 			taskHistory: (taskHistory || [])
-				.filter((item) => item.ts && item.task)
+				.filter((item) => item.ts && item.task && item.agentType === "planner")
 				.sort((a, b) => b.ts - a.ts)
 				.slice(0, 100), // for now we're only getting the latest 100 tasks, but a better solution here is to only pass in 3 for recent task history, and then get the full task history on demand when going to the task history view (maybe with pagination?)
 			shouldShowAnnouncement: lastShownAnnouncementId !== this.latestAnnouncementId,

@@ -7,12 +7,24 @@ const TabsContainer = styled.div`
   display: flex;
   flex-direction: column;
   height: 100%;
+  position: relative;
 `;
 
 const TabsHeader = styled.div`
   display: flex;
   background-color: var(--vscode-editorGroupHeader-tabsBackground);
   border-bottom: 1px solid var(--vscode-editorGroupHeader-tabsBorder);
+  overflow-x: auto;
+  scrollbar-width: thin;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  &::-webkit-scrollbar {
+    height: 4px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background-color: var(--vscode-scrollbarSlider-background);
+  }
 `;
 
 const TabButton = styled.button<{ isActive: boolean }>`
@@ -22,6 +34,13 @@ const TabButton = styled.button<{ isActive: boolean }>`
   padding: 8px 16px;
   cursor: pointer;
   border-bottom: 2px solid ${props => props.isActive ? 'var(--vscode-focusBorder)' : 'transparent'};
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  min-width: 100px;
+  justify-content: center;
+  position: relative;
+  z-index: 101;
   &:hover {
     background: var(--vscode-tab-hoverBackground);
   }
@@ -30,66 +49,108 @@ const TabButton = styled.button<{ isActive: boolean }>`
 const TabContent = styled.div`
   flex: 1;
   overflow: auto;
+  position: relative;
+`;
+
+// 智能体图标
+const AgentIcon = styled.span`
+  margin-right: 6px;
+  font-size: 14px;
+`;
+
+// 消息数量标记
+const MessageCount = styled.span`
+  background-color: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+  border-radius: 10px;
+  padding: 0 6px;
+  font-size: 12px;
+  margin-left: 6px;
+  min-width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 `;
 
 export interface AgentTabsProps {
   showHistoryView?: () => void;
   showAnnouncement?: boolean;
-  setShowAnnouncement?: React.Dispatch<React.SetStateAction<boolean>>;
+  hideAnnouncement?: () => void;
+}
+
+// 智能体类型定义
+interface AgentTab {
+  id: string;
+  name: string;
+  type: 'planner' | 'coder';
+  icon: string;
+  messageCount: number;
 }
 
 const AgentTabs: React.FC<AgentTabsProps> = (props) => {
-  const { clineMessages, coderMessages, coderCreated, agentRelationships } = useExtensionState();
-  const [selectedTab, setSelectedTab] = useState<'planner' | 'coder'>('planner');
+  const extensionState = useExtensionState();
+  const { clineMessages, coderMessages } = extensionState;
+  const [selectedTabId, setSelectedTabId] = useState<'planner' | 'coder'>('planner');
+  
+  // 添加调试输出
+  useEffect(() => {
+    console.log('ExtensionState:', {
+      selectedTab: selectedTabId,
+      clineMessagesCount: clineMessages.length,
+      coderMessagesCount: coderMessages.length,
+      fullState: extensionState
+    });
+  }, [selectedTabId, clineMessages, coderMessages, extensionState]);
+  
+  // 固定的标签页配置
+  const tabs: AgentTab[] = [
+    { 
+      id: 'planner', 
+      name: 'Planner', 
+      type: 'planner', 
+      icon: '🧠',
+      messageCount: clineMessages.length
+    },
+    { 
+      id: 'coder', 
+      name: 'Coder', 
+      type: 'coder', 
+      icon: '💻',
+      messageCount: coderMessages.length
+    }
+  ];
   
   // 自动切换到有内容的标签页
   useEffect(() => {
-    if (selectedTab === 'planner' && clineMessages.length === 0 && coderMessages.length > 0) {
-      setSelectedTab('coder');
-    } else if (selectedTab === 'coder' && coderMessages.length === 0 && clineMessages.length > 0) {
-      setSelectedTab('planner');
+    if (selectedTabId === 'planner' && clineMessages.length === 0 && coderMessages.length > 0) {
+      setSelectedTabId('coder');
+    } else if (selectedTabId === 'coder' && coderMessages.length === 0 && clineMessages.length > 0) {
+      setSelectedTabId('planner');
     }
-  }, [clineMessages, coderMessages, selectedTab]);
+  }, [clineMessages, coderMessages, selectedTabId]);
   
   // 提供默认值，确保类型匹配
   const showHistoryView = props.showHistoryView || (() => {});
   const showAnnouncement = props.showAnnouncement || false;
-  const hideAnnouncement = props.setShowAnnouncement ? () => props.setShowAnnouncement!(false) : () => {};
-  
-  // 判断是否显示标签页：
-  // 1. coderCreated标志为true或
-  // 2. 当前任务存在关联的代码智能体ID
-  const showTabs = coderCreated === true || 
-                  (agentRelationships?.currentCoderIds && agentRelationships.currentCoderIds.length > 0);
-  
-  if (!showTabs) {
-    // 如果coder没有消息，直接显示planner消息
-    return (
-      <ChatView 
-        isHidden={false}
-        showHistoryView={showHistoryView}
-        showAnnouncement={showAnnouncement}
-        hideAnnouncement={hideAnnouncement}
-        messageSource="planner"
-      />
-    );
-  }
+  const hideAnnouncement = props.hideAnnouncement || (() => {});
   
   return (
     <TabsContainer>
       <TabsHeader>
-        <TabButton 
-          isActive={selectedTab === 'planner'}
-          onClick={() => setSelectedTab('planner')}
-        >
-          Planner
-        </TabButton>
-        <TabButton
-          isActive={selectedTab === 'coder'}
-          onClick={() => setSelectedTab('coder')}
-        >
-          Coder
-        </TabButton>
+        {tabs.map(tab => (
+          <TabButton 
+            key={tab.id}
+            isActive={selectedTabId === tab.id}
+            onClick={() => setSelectedTabId(tab.id as 'planner' | 'coder')}
+          >
+            <AgentIcon>{tab.icon}</AgentIcon>
+            {tab.name}
+            {tab.messageCount > 0 && (
+              <MessageCount>{tab.messageCount}</MessageCount>
+            )}
+          </TabButton>
+        ))}
       </TabsHeader>
       <TabContent>
         <ChatView 
@@ -97,7 +158,7 @@ const AgentTabs: React.FC<AgentTabsProps> = (props) => {
           showHistoryView={showHistoryView}
           showAnnouncement={showAnnouncement}
           hideAnnouncement={hideAnnouncement}
-          messageSource={selectedTab}
+          messageSource={selectedTabId}
         />
       </TabContent>
     </TabsContainer>
