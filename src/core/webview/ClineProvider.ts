@@ -28,7 +28,7 @@ import { McpDownloadResponse, McpMarketplaceCatalog, McpServer } from "../../sha
 import { ClineCheckpointRestore, WebviewMessage } from "../../shared/WebviewMessage"
 import { fileExistsAtPath } from "../../utils/fs"
 import { searchCommits } from "../../utils/git"
-import { Cline } from "../Cline"
+import { Agent } from "../Agent"
 import { openMention } from "../mentions"
 import { getNonce } from "./getNonce"
 import { getUri } from "./getUri"
@@ -121,8 +121,8 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 	private static activeInstances: Set<ClineProvider> = new Set()
 	private disposables: vscode.Disposable[] = []
 	private view?: vscode.WebviewView | vscode.WebviewPanel
-	private planner?: Cline
-	private coder?: Cline  // 添加coder属性
+	private planner?: Agent
+	private coder?: Agent  // 添加coder属性
 	private agents: string[] = []
 	workspaceTracker?: WorkspaceTracker
 	mcpHub?: McpHub
@@ -285,7 +285,7 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			const { apiConfiguration, customInstructions, autoApprovalSettings, browserSettings, chatSettings } =
 				await this.getState()
 			this.agents = []
-			this.planner = new Cline(
+			this.planner = new Agent(
 				this,
 				apiConfiguration,
 				autoApprovalSettings,
@@ -307,7 +307,7 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			await this.getState()
 		// 回退到直接创建Cline实例
 		if (historyItem.agentType === "planner") {
-			this.planner = new Cline(
+			this.planner = new Agent(
 				this,
 				apiConfiguration,
 				autoApprovalSettings,
@@ -321,7 +321,7 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			)
 		}
 		if (historyItem.agentType === "coder") {
-			this.coder = new Cline(
+			this.coder = new Agent(
 				this,
 				apiConfiguration,
 				autoApprovalSettings,
@@ -2361,8 +2361,8 @@ Here is the project's README to help you get started:\n\n${mcpDetails.readmeCont
 	async createCoderAgent(formattedTask: string): Promise<string> {
 		const { apiConfiguration, customInstructions, autoApprovalSettings, browserSettings, chatSettings } = await this.getState();
 		
-		// 创建一个新的Cline实例，指定agentType为'coder'
-		this.coder = new Cline(
+		// 创建一个新的Agent实例，指定agentType为'coder'
+		this.coder = new Agent(
 			this,
 			apiConfiguration,
 			autoApprovalSettings,

@@ -4,33 +4,33 @@ import * as path from "path"
 import { ClineIgnoreController, LOCK_TEXT_SYMBOL } from "../ignore/ClineIgnoreController"
 
 export const formatResponse = {
-	toolDenied: () => `The user denied this operation.`,
+	toolDenied: () => `用户拒绝了此操作。`,
 
-	toolError: (error?: string) => `The tool execution failed with the following error:\n<error>\n${error}\n</error>`,
+	toolError: (error?: string) => `工具执行失败，错误信息如下：\n<error>\n${error}\n</error>`,
 
 	clineIgnoreError: (path: string) =>
-		`Access to ${path} is blocked by the .clineignore file settings. You must try to continue in the task without using this file, or ask the user to update the .clineignore file.`,
+		`访问 ${path} 被 .clineignore 文件设置所阻止。你必须尝试在不使用该文件的情况下继续任务，或者请求用户更新 .clineignore 文件。`,
 
 	noToolsUsed: () =>
-		`[ERROR] You did not use a tool in your previous response! Please retry with a tool use.
+		`[ERROR] 你在上一个回复中没有使用任何工具！请重试并使用工具。
 
 ${toolUseInstructionsReminder}
 
-# Next Steps
-
-If you have completed the user's task, use the attempt_completion tool. 
-If you require additional information from the user, use the ask_followup_question tool. 
-Otherwise, if you have not completed the task and do not need additional information, then proceed with the next step of the task. 
-(This is an automated message, so do not respond to it conversationally.)`,
+# 下一步
+你的每次回复都必须在末尾使用工具。
+如果你已完成用户的任务，请使用 attempt_completion 工具。
+如果你需要用户提供更多信息，请使用 ask_followup_question 工具。
+否则，如果你还没有完成任务且不需要额外信息，那么请继续执行任务的下一步。
+（这是一条自动消息，请不要对其进行会话式回复。）`,
 
 	tooManyMistakes: (feedback?: string) =>
-		`You seem to be having trouble proceeding. The user has provided the following feedback to help guide you:\n<feedback>\n${feedback}\n</feedback>`,
+		`看起来你在继续执行时遇到了困难。用户提供了以下反馈来帮助指导你：\n<feedback>\n${feedback}\n</feedback>`,
 
 	missingToolParameterError: (paramName: string) =>
-		`Missing value for required parameter '${paramName}'. Please retry with complete response.\n\n${toolUseInstructionsReminder}`,
+		`缺少必需参数 '${paramName}' 的值。请使用完整的响应重试。\n\n${toolUseInstructionsReminder}`,
 
 	invalidMcpToolArgumentError: (serverName: string, toolName: string) =>
-		`Invalid JSON argument used with ${serverName} for ${toolName}. Please retry with a properly formatted JSON argument.`,
+		`${serverName} 的 ${toolName} 使用了无效的 JSON 参数。请使用正确格式的 JSON 参数重试。`,
 
 	toolResult: (text: string, images?: string[]): string | Array<Anthropic.TextBlockParam | Anthropic.ImageBlockParam> => {
 		if (images && images.length > 0) {
@@ -138,9 +138,9 @@ const formatImagesIntoBlocks = (images?: string[]): Anthropic.ImageBlockParam[] 
 		: []
 }
 
-const toolUseInstructionsReminder = `# Reminder: Instructions for Tool Use
+const toolUseInstructionsReminder = `# 提醒：工具使用说明
 
-Tool uses are formatted using XML-style tags. The tool name is enclosed in opening and closing tags, and each parameter is similarly enclosed within its own set of tags. Here's the structure:
+工具使用需要使用 XML 风格的标签格式。工具名称要用开始和结束标签包围，每个参数也同样需要用其对应的标签包围。结构如下：
 
 <tool_name>
 <parameter1_name>value1</parameter1_name>
@@ -148,12 +148,12 @@ Tool uses are formatted using XML-style tags. The tool name is enclosed in openi
 ...
 </tool_name>
 
-For example:
+例如：
 
 <attempt_completion>
 <result>
-I have completed the task...
+我已完成任务...
 </result>
 </attempt_completion>
 
-Always adhere to this format for all tool uses to ensure proper parsing and execution.`
+请始终遵循这种格式来使用所有工具，以确保正确的解析和执行。`

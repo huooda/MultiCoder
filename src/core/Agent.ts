@@ -103,7 +103,7 @@ const cwd = vscode.workspace.workspaceFolders?.map((folder) => folder.uri.fsPath
 type ToolResponse = string | Array<Anthropic.TextBlockParam | Anthropic.ImageBlockParam>
 type UserContent = Array<Anthropic.ContentBlockParam>
 
-export class Cline {
+export class Agent {
 	readonly taskId: string
 	readonly apiProvider?: string
 	api: ApiHandler
@@ -137,7 +137,7 @@ export class Cline {
 	didRespondToPlanAskBySwitchingMode = false
 	
 	// 智能体类型：planner(计划智能体)或coder(代码智能体)
-	private agentType?: string
+	agentType?: string
 	
 	// streaming
 	isWaitingForFirstChunk = false
@@ -3052,7 +3052,8 @@ export class Cline {
 						return [
 						*/
 						const result: string | undefined = block.params.result
-						const command: string | undefined = block.params.command
+						// const command: string | undefined = block.params.command
+						const command = undefined
 
 						const addNewChangesFlagToLastCompletionResultMessage = async () => {
 							// Add newchanges flag if there are new changes to the workspace
