@@ -2405,4 +2405,24 @@ Here is the project's README to help you get started:\n\n${mcpDetails.readmeCont
 		}
 	}
 
+	async getAgent(agentName: string) {
+		// 检查是否以planner开头
+		if (agentName.startsWith('planner')) {
+			return this.planner;
+		}
+		
+		// 检查是否以coder开头
+		if (agentName.startsWith('coder')) {
+			// 由于当前设计只有一个coder,直接返回this.coder
+			return this.coder;
+			
+			// 如果未来需要支持多个coder,可以这样获取id:
+			// const coderId = agentName.substring('coder'.length);
+			// return this.coders.get(coderId);
+		}
+		
+		// 如果都不匹配,返回undefined
+		return undefined;
+	}
+
 }

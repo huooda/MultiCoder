@@ -163,7 +163,7 @@ export const CODER_AGENT_PROMPT = async (
 描述：用于与其他智能体进行通信。当你需要向其他智能体发送消息、报告状态或请求协助时使用此工具。此工具会自动处理智能体间的消息传递，确保消息在合适的时机被传递和处理。
 
 参数：
-- agent_name：(必需)目标智能体的类型。可选值为：
+- target_agent：(必需)目标智能体的类型。可选值为：
     * planner：计划智能体，负责任务规划和协调
 - message：(必需)要发送给目标智能体的消息内容。应该清晰描述：
     * 你的身份(发送者)
@@ -173,7 +173,7 @@ export const CODER_AGENT_PROMPT = async (
 
 用法：
 <communicate_with_agent>
-<agent_name>目标智能体名称</agent_type>
+<target_agent>目标智能体名称</target_agent>
 <message>消息内容</message>
 </communicate_with_agent>
 
