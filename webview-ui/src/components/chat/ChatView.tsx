@@ -1,6 +1,6 @@
 import { VSCodeButton, VSCodeLink } from "@vscode/webview-ui-toolkit/react"
 import debounce from "debounce"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import React, { useCallback, useEffect, useMemo, useRef, useState, ReactNode } from "react"
 import { useDeepCompareEffect, useEvent, useMount } from "react-use"
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso"
 import styled from "styled-components"
@@ -25,7 +25,7 @@ import AutoApproveMenu from "./AutoApproveMenu"
 import BrowserSessionRow from "./BrowserSessionRow"
 import ChatRow from "./ChatRow"
 import ChatTextArea from "./ChatTextArea"
-import TaskHeader from "./TaskHeader"
+// import TaskHeader from "./TaskHeader"
 import TelemetryBanner from "../common/TelemetryBanner"
 
 interface ChatViewProps {
@@ -45,8 +45,8 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 	const messages = messageSource === 'planner' ? clineMessages : coderMessages;
 
 	//const task = messages.length > 0 ? (messages[0].say === "task" ? messages[0] : undefined) : undefined) : undefined
-	const task = useMemo(() => messages.at(0), [messages]) // leaving this less safe version here since if the first message is not a task, then the extension is in a bad state and needs to be debugged (see Cline.abort)
-	const modifiedMessages = useMemo(() => combineApiRequests(combineCommandSequences(messages.slice(1))), [messages])
+	const task = useMemo(() => messages.at(0), [messages])
+	const modifiedMessages = useMemo(() => combineApiRequests(combineCommandSequences(messages)), [messages])
 	// has to be after api_req_finished are all reduced into api_req_started messages
 	const apiMetrics = useMemo(() => getApiMetrics(modifiedMessages), [modifiedMessages])
 
@@ -511,6 +511,8 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 				case "api_req_finished": // combineApiRequests removes this from modifiedMessages anyways
 				case "api_req_retried": // this message is used to update the latest api_req_started that the request was retried
 				case "deleted_api_reqs": // aggregated api_req metrics from deleted messages
+				case "checkpoint_created": // 隐藏 checkpoint_created 消息
+				case "api_req_started": // 隐藏 api_req_started 消息
 					return false
 				case "text":
 					// Sometimes cline returns an empty text message, we don't want to render these. (We also use a say text for user messages, so in case they just sent images we still render that)
@@ -771,19 +773,21 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 				display: isHidden ? "none" : "flex",
 				flexDirection: "column",
 				overflow: "hidden",
+				paddingTop: "40px"
 			}}>
 			{task ? (
-				<TaskHeader
-					task={task}
-					tokensIn={apiMetrics.totalTokensIn}
-					tokensOut={apiMetrics.totalTokensOut}
-					doesModelSupportPromptCache={selectedModelInfo.supportsPromptCache}
-					cacheWrites={apiMetrics.totalCacheWrites}
-					cacheReads={apiMetrics.totalCacheReads}
-					totalCost={apiMetrics.totalCost}
-					lastApiReqTotalTokens={lastApiReqTotalTokens}
-					onClose={handleTaskCloseButtonClick}
-				/>
+				// <TaskHeader
+				// 	task={task}
+				// 	tokensIn={apiMetrics.totalTokensIn}
+				// 	tokensOut={apiMetrics.totalTokensOut}
+				// 	doesModelSupportPromptCache={selectedModelInfo.supportsPromptCache}
+				// 	cacheWrites={apiMetrics.totalCacheWrites}
+				// 	cacheReads={apiMetrics.totalCacheReads}
+				// 	totalCost={apiMetrics.totalCost}
+				// 	lastApiReqTotalTokens={lastApiReqTotalTokens}
+				// 	onClose={handleTaskCloseButtonClick}
+				// />
+				<></>
 			) : (
 				<div
 					style={{
@@ -841,91 +845,60 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 			)}
 
 			{task && (
-				<>
-					<div style={{ flexGrow: 1, display: "flex" }} ref={scrollContainerRef}>
-						<Virtuoso
-							ref={virtuosoRef}
-							key={task.ts} // trick to make sure virtuoso re-renders when task changes, and we use initialTopMostItemIndex to start at the bottom
-							className="scrollable"
-							style={{
-								flexGrow: 1,
-								overflowY: "scroll", // always show scrollbar
-							}}
-							components={{
-								Footer: () => <div style={{ height: 5 }} />, // Add empty padding at the bottom
-							}}
-							// increasing top by 3_000 to prevent jumping around when user collapses a row
-							increaseViewportBy={{
-								top: 3_000,
-								bottom: Number.MAX_SAFE_INTEGER,
-							}} // hack to make sure the last message is always rendered to get truly perfect scroll to bottom animation when new messages are added (Number.MAX_SAFE_INTEGER is safe for arithmetic operations, which is all virtuoso uses this value for in src/sizeRangeSystem.ts)
-							data={groupedMessages} // messages is the raw format returned by extension, modifiedMessages is the manipulated structure that combines certain messages of related type, and visibleMessages is the filtered structure that removes messages that should not be rendered
-							itemContent={itemContent}
-							atBottomStateChange={(isAtBottom) => {
-								setIsAtBottom(isAtBottom)
-								if (isAtBottom) {
-									disableAutoScrollRef.current = false
-								}
-								setShowScrollToBottom(disableAutoScrollRef.current && !isAtBottom)
-							}}
-							atBottomThreshold={10} // anything lower causes issues with followOutput
-							initialTopMostItemIndex={groupedMessages.length - 1}
-						/>
-					</div>
+				<div 
+					ref={scrollContainerRef}
+					style={{ 
+						flex: "1 1 auto",
+						display: "flex",
+						marginTop: "10px",
+						flexDirection: "column"
+					}}
+				>
+					<Virtuoso
+						ref={virtuosoRef}
+						key={task.ts}
+						className="scrollable"
+						style={{
+							flex: "1 1 auto",
+							overflowY: "scroll",
+							paddingTop: "10px"
+						}}
+						components={{
+							Footer: () => <div style={{ height: 5 }} />, // Add empty padding at the bottom
+						}}
+						// increasing top by 3_000 to prevent jumping around when user collapses a row
+						increaseViewportBy={{
+							top: 3_000,
+							bottom: Number.MAX_SAFE_INTEGER,
+						}} // hack to make sure the last message is always rendered to get truly perfect scroll to bottom animation when new messages are added (Number.MAX_SAFE_INTEGER is safe for arithmetic operations, which is all virtuoso uses this value for in src/sizeRangeSystem.ts)
+						data={groupedMessages} // messages is the raw format returned by extension, modifiedMessages is the manipulated structure that combines certain messages of related type, and visibleMessages is the filtered structure that removes messages that should not be rendered
+						itemContent={itemContent}
+						atBottomStateChange={(isAtBottom) => {
+							setIsAtBottom(isAtBottom)
+							if (isAtBottom) {
+								disableAutoScrollRef.current = false
+							}
+							setShowScrollToBottom(disableAutoScrollRef.current && !isAtBottom)
+						}}
+						atBottomThreshold={10} // anything lower causes issues with followOutput
+						initialTopMostItemIndex={groupedMessages.length - 1}
+					/>
 					<AutoApproveMenu />
 					{showScrollToBottom ? (
-						<div
-							style={{
-								display: "flex",
-								padding: "10px 15px 0px 15px",
+						<div style={{
+							position: "absolute",
+							bottom: "20px",
+							right: "20px"
+						}}>
+							<ScrollToBottomButton onClick={() => {
+								scrollToBottomSmooth()
+								disableAutoScrollRef.current = false
 							}}>
-							<ScrollToBottomButton
-								onClick={() => {
-									scrollToBottomSmooth()
-									disableAutoScrollRef.current = false
-								}}>
 								<span className="codicon codicon-chevron-down" style={{ fontSize: "18px" }}></span>
 							</ScrollToBottomButton>
 						</div>
-					) : (
-						<div
-							style={{
-								opacity:
-									primaryButtonText || secondaryButtonText || isStreaming
-										? enableButtons || (isStreaming && !didClickCancel)
-											? 1
-											: 0.5
-										: 0,
-								display: "flex",
-								padding: `${primaryButtonText || secondaryButtonText || isStreaming ? "10" : "0"}px 15px 0px 15px`,
-							}}>
-							{primaryButtonText && !isStreaming && (
-								<VSCodeButton
-									appearance="primary"
-									disabled={!enableButtons}
-									style={{
-										flex: secondaryButtonText ? 1 : 2,
-										marginRight: secondaryButtonText ? "6px" : "0",
-									}}
-									onClick={() => handlePrimaryButtonClick(inputValue, selectedImages)}>
-									{primaryButtonText}
-								</VSCodeButton>
-							)}
-							{(secondaryButtonText || isStreaming) && (
-								<VSCodeButton
-									appearance="secondary"
-									disabled={!enableButtons && !(isStreaming && !didClickCancel)}
-									style={{
-										flex: isStreaming ? 2 : 1,
-										marginLeft: isStreaming ? 0 : "6px",
-									}}
-									onClick={() => handleSecondaryButtonClick(inputValue, selectedImages)}>
-									{isStreaming ? "Cancel" : secondaryButtonText}
-								</VSCodeButton>
-							)}
-						</div>
-					)}
-				</>
+					) : null}
+				</div>
 			)}
 			<ChatTextArea
 				ref={textAreaRef}
@@ -949,22 +922,17 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 }
 
 const ScrollToBottomButton = styled.div`
-	background-color: color-mix(in srgb, var(--vscode-toolbar-hoverBackground) 55%, transparent);
-	border-radius: 3px;
-	overflow: hidden;
-	cursor: pointer;
 	display: flex;
 	justify-content: center;
 	align-items: center;
-	flex: 1;
-	height: 25px;
-
+	width: 32px;
+	height: 32px;
+	border-radius: 50%;
+	cursor: pointer;
+	background-color: var(--vscode-button-background);
+	color: var(--vscode-button-foreground);
 	&:hover {
-		background-color: color-mix(in srgb, var(--vscode-toolbar-hoverBackground) 90%, transparent);
-	}
-
-	&:active {
-		background-color: color-mix(in srgb, var(--vscode-toolbar-hoverBackground) 70%, transparent);
+		opacity: 0.8;
 	}
 `
 

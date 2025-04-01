@@ -243,16 +243,6 @@ export const ChatRowContent = ({ message, isExpanded, onToggleExpand, lastModifi
 						MCP server:
 					</span>,
 				]
-			case "completion_result":
-				return [
-					<span
-						className="codicon codicon-check"
-						style={{
-							color: successColor,
-							marginBottom: "-1.5px",
-						}}></span>,
-					<span style={{ color: successColor, fontWeight: "bold" }}>Task Completed</span>,
-				]
 			case "api_req_started":
 				const getIconSpan = (iconName: string, color: string) => (
 					<div
@@ -317,9 +307,22 @@ export const ChatRowContent = ({ message, isExpanded, onToggleExpand, lastModifi
 					<span style={{ color: normalColor, fontWeight: "bold" }}>Cline has a question:</span>,
 				]
 			default:
-				return [null, null]
+				return [undefined, undefined]
 		}
-	}, [type, cost, apiRequestFailedMessage, isCommandExecuting, apiReqCancelReason, isMcpServerResponding, message.text])
+	}, [
+		type,
+		message.text,
+		mcpMarketplaceCatalog,
+		normalColor,
+		errorColor,
+		successColor,
+		cancelledColor,
+		apiReqCancelReason,
+		cost,
+		apiRequestFailedMessage,
+		isCommandExecuting,
+		isMcpServerResponding,
+	])
 
 	const headerStyle: React.CSSProperties = {
 		display: "flex",
@@ -1010,47 +1013,45 @@ export const ChatRowContent = ({ message, isExpanded, onToggleExpand, lastModifi
 						</>
 					)
 				case "completion_result":
-					const hasChanges = message.text?.endsWith(COMPLETION_RESULT_CHANGES_FLAG) ?? false
-					const text = hasChanges ? message.text?.slice(0, -COMPLETION_RESULT_CHANGES_FLAG.length) : message.text
-					return (
-						<>
-							<div
-								style={{
-									...headerStyle,
-									marginBottom: "10px",
-								}}>
-								{icon}
-								{title}
-							</div>
-							<div
-								style={{
-									color: "var(--vscode-charts-green)",
-									paddingTop: 10,
-								}}>
-								<Markdown markdown={text} />
-							</div>
-							{message.partial !== true && hasChanges && (
-								<div style={{ paddingTop: 17 }}>
-									<SuccessButton
-										disabled={seeNewChangesDisabled}
-										onClick={() => {
-											setSeeNewChangesDisabled(true)
-											vscode.postMessage({
-												type: "taskCompletionViewChanges",
-												number: message.ts,
-											})
-										}}
-										style={{
-											width: "100%",
-											cursor: seeNewChangesDisabled ? "wait" : "pointer",
-										}}>
-										<i className="codicon codicon-new-file" style={{ marginRight: 6 }} />
-										See new changes
-									</SuccessButton>
+					if (message.text) {
+						const hasChanges = message.text.endsWith(COMPLETION_RESULT_CHANGES_FLAG) ?? false
+						const text = hasChanges ? message.text.slice(0, -COMPLETION_RESULT_CHANGES_FLAG.length) : message.text
+						return (
+							<div>
+								<div
+									style={{
+										paddingTop: 10,
+									}}>
+									<Markdown markdown={text} />
+									{message.partial !== true && hasChanges && (
+										<div style={{ marginTop: 15 }}>
+											<SuccessButton
+												appearance="secondary"
+												disabled={seeNewChangesDisabled}
+												onClick={() => {
+													setSeeNewChangesDisabled(true)
+													vscode.postMessage({
+														type: "taskCompletionViewChanges",
+														number: message.ts,
+													})
+												}}>
+												<i
+													className="codicon codicon-new-file"
+													style={{
+														marginRight: 6,
+														cursor: seeNewChangesDisabled ? "wait" : "pointer",
+													}}
+												/>
+												See new changes
+											</SuccessButton>
+										</div>
+									)}
 								</div>
-							)}
-						</>
-					)
+							</div>
+						)
+					} else {
+						return null // Don't render anything when we get a completion_result ask without text
+					}
 				case "shell_integration_warning":
 					return (
 						<>
