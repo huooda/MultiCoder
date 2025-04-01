@@ -169,11 +169,18 @@ export interface ClineSayTool {
 		| "listFilesRecursive"
 		| "listCodeDefinitionNames"
 		| "searchFiles"
+		| "communicateWithAgent"
+		| "create_coder_agent"
 	path?: string
 	diff?: string
 	content?: string
 	regex?: string
 	filePattern?: string
+	message?: string
+	task_description?: string
+	code_style?: string
+	requirements?: string
+	result?: string
 }
 
 // must keep in sync with system prompt

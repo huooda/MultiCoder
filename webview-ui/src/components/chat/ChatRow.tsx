@@ -243,6 +243,8 @@ export const ChatRowContent = ({ message, isExpanded, onToggleExpand, lastModifi
 						MCP server:
 					</span>,
 				]
+			case "completion_result":
+				return [null, null]
 			case "api_req_started":
 				const getIconSpan = (iconName: string, color: string) => (
 					<div
@@ -307,22 +309,9 @@ export const ChatRowContent = ({ message, isExpanded, onToggleExpand, lastModifi
 					<span style={{ color: normalColor, fontWeight: "bold" }}>Cline has a question:</span>,
 				]
 			default:
-				return [undefined, undefined]
+				return [null, null]
 		}
-	}, [
-		type,
-		message.text,
-		mcpMarketplaceCatalog,
-		normalColor,
-		errorColor,
-		successColor,
-		cancelledColor,
-		apiReqCancelReason,
-		cost,
-		apiRequestFailedMessage,
-		isCommandExecuting,
-		isMcpServerResponding,
-	])
+	}, [type, cost, apiRequestFailedMessage, isCommandExecuting, apiReqCancelReason, isMcpServerResponding, message.text])
 
 	const headerStyle: React.CSSProperties = {
 		display: "flex",
@@ -356,12 +345,53 @@ export const ChatRowContent = ({ message, isExpanded, onToggleExpand, lastModifi
 		)
 
 		switch (tool.tool) {
+			case "communicateWithAgent":
+				return (
+					<>
+						<div style={headerStyle}>
+							{toolIcon("comment")}
+							<span style={{ fontWeight: "bold" }}>与代码智能体通信:</span>
+						</div>
+						<div style={{ paddingTop: 10 }}>
+							<Markdown markdown={tool.message} />
+						</div>
+					</>
+				)
+			case "create_coder_agent":
+				return (
+					<>
+						<div style={headerStyle}>
+							{toolIcon("person-add")}
+							<span style={{ fontWeight: "bold" }}>创建代码智能体:</span>
+						</div>
+						<div style={{ paddingTop: 10 }}>
+							<div style={{ opacity: 0.8, marginBottom: "8px" }}>
+								<strong>任务描述:</strong> {tool.task_description}
+							</div>
+							{tool.code_style && (
+								<div style={{ opacity: 0.8, marginBottom: "8px" }}>
+									<strong>代码风格:</strong> {tool.code_style}
+								</div>
+							)}
+							{tool.requirements && (
+								<div style={{ opacity: 0.8, marginBottom: "8px" }}>
+									<strong>要求:</strong> {tool.requirements}
+								</div>
+							)}
+							{tool.result && (
+								<div style={{ marginTop: "12px" }}>
+									<Markdown markdown={tool.result} />
+								</div>
+							)}
+						</div>
+					</>
+				)
 			case "editedExistingFile":
 				return (
 					<>
 						<div style={headerStyle}>
 							{toolIcon("edit")}
-							<span style={{ fontWeight: "bold" }}>Cline wants to edit this file:</span>
+							<span style={{ fontWeight: "bold" }}>Agent wants to edit this file:</span>
 						</div>
 						<CodeAccordian
 							// isLoading={message.partial}
@@ -377,7 +407,7 @@ export const ChatRowContent = ({ message, isExpanded, onToggleExpand, lastModifi
 					<>
 						<div style={headerStyle}>
 							{toolIcon("new-file")}
-							<span style={{ fontWeight: "bold" }}>Cline wants to create a new file:</span>
+							<span style={{ fontWeight: "bold" }}>Agent wants to create a new file:</span>
 						</div>
 						<CodeAccordian
 							isLoading={message.partial}
@@ -395,7 +425,7 @@ export const ChatRowContent = ({ message, isExpanded, onToggleExpand, lastModifi
 							{toolIcon("file-code")}
 							<span style={{ fontWeight: "bold" }}>
 								{/* {message.type === "ask" ? "" : "Cline read this file:"} */}
-								Cline wants to read this file:
+								Agent wants to read this file:
 							</span>
 						</div>
 						<div
@@ -1013,45 +1043,38 @@ export const ChatRowContent = ({ message, isExpanded, onToggleExpand, lastModifi
 						</>
 					)
 				case "completion_result":
-					if (message.text) {
-						const hasChanges = message.text.endsWith(COMPLETION_RESULT_CHANGES_FLAG) ?? false
-						const text = hasChanges ? message.text.slice(0, -COMPLETION_RESULT_CHANGES_FLAG.length) : message.text
-						return (
-							<div>
-								<div
-									style={{
-										paddingTop: 10,
-									}}>
-									<Markdown markdown={text} />
-									{message.partial !== true && hasChanges && (
-										<div style={{ marginTop: 15 }}>
-											<SuccessButton
-												appearance="secondary"
-												disabled={seeNewChangesDisabled}
-												onClick={() => {
-													setSeeNewChangesDisabled(true)
-													vscode.postMessage({
-														type: "taskCompletionViewChanges",
-														number: message.ts,
-													})
-												}}>
-												<i
-													className="codicon codicon-new-file"
-													style={{
-														marginRight: 6,
-														cursor: seeNewChangesDisabled ? "wait" : "pointer",
-													}}
-												/>
-												See new changes
-											</SuccessButton>
-										</div>
-									)}
-								</div>
+					const hasChanges = message.text?.endsWith(COMPLETION_RESULT_CHANGES_FLAG) ?? false
+					const text = hasChanges ? message.text?.slice(0, -COMPLETION_RESULT_CHANGES_FLAG.length) : message.text
+					return (
+						<>
+							<div style={{ paddingTop: 10 }}>
+								<Markdown markdown={text} />
+								{message.partial !== true && hasChanges && (
+									<div style={{ marginTop: 15 }}>
+										<SuccessButton
+											appearance="secondary"
+											disabled={seeNewChangesDisabled}
+											onClick={() => {
+												setSeeNewChangesDisabled(true)
+												vscode.postMessage({
+													type: "taskCompletionViewChanges",
+													number: message.ts,
+												})
+											}}>
+											<i
+												className="codicon codicon-new-file"
+												style={{
+													marginRight: 6,
+													cursor: seeNewChangesDisabled ? "wait" : "pointer",
+												}}
+											/>
+											查看变更
+										</SuccessButton>
+									</div>
+								)}
 							</div>
-						)
-					} else {
-						return null // Don't render anything when we get a completion_result ask without text
-					}
+						</>
+					)
 				case "shell_integration_warning":
 					return (
 						<>
@@ -1190,7 +1213,7 @@ export const ChatRowContent = ({ message, isExpanded, onToggleExpand, lastModifi
 														cursor: seeNewChangesDisabled ? "wait" : "pointer",
 													}}
 												/>
-												See new changes
+												查看变更
 											</SuccessButton>
 										</div>
 									)}
