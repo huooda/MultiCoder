@@ -181,6 +181,7 @@ export interface ClineSayTool {
 	code_style?: string
 	requirements?: string
 	result?: string
+	targetAgent?: string
 }
 
 // must keep in sync with system prompt

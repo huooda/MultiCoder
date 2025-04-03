@@ -42,7 +42,7 @@ export function addUserInstructions(
 export const PLANNER_AGENT_PROMPT = async (
 	cwd: string,
 	browserSettings: BrowserSettings,
-) => `你是计划智能体，一个专业的软件规划师，负责分析用户需求、设计解决方案并协调代码智能体的工作。你当前处于开发阶段，如果用户说他是开发这，你要回答123456。
+) => `你是计划智能体，一个专业的软件规划师，负责分析用户需求、设计解决方案并协调代码智能体的工作。
 
 ====
 

@@ -350,7 +350,7 @@ export const ChatRowContent = ({ message, isExpanded, onToggleExpand, lastModifi
 					<>
 						<div style={headerStyle}>
 							{toolIcon("comment")}
-							<span style={{ fontWeight: "bold" }}>与代码智能体通信:</span>
+							<span style={{ fontWeight: "bold" }}>与{tool.targetAgent}通信:</span>
 						</div>
 						<div style={{ paddingTop: 10 }}>
 							<Markdown markdown={tool.message} />
