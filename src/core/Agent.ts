@@ -80,7 +80,7 @@ ${codeStyle}
 ## 技术要求
 ${requirements}
 
-请按照以上要求完成任务。`;
+请按照以上要求完成任务。`
 }
 
 // 添加removeClosingTag函数的定义
@@ -91,11 +91,11 @@ ${requirements}
  * @returns 处理后的参数值
  */
 function removeClosingTag(paramName: string, value?: string): string {
-    if (!value) return ""
-    
-    // 移除可能的XML闭合标签
-    const closingTagRegex = new RegExp(`</${paramName}>$`)
-    return value.replace(closingTagRegex, "")
+	if (!value) return ""
+
+	// 移除可能的XML闭合标签
+	const closingTagRegex = new RegExp(`</${paramName}>$`)
+	return value.replace(closingTagRegex, "")
 }
 
 const cwd = vscode.workspace.workspaceFolders?.map((folder) => folder.uri.fsPath).at(0) ?? path.join(os.homedir(), "Desktop") // may or may not exist but fs checking existence would immediately ask for permission which would be bad UX, need to come up with a better solution
@@ -135,10 +135,10 @@ export class Agent {
 	isInitialized = false
 	isAwaitingPlanResponse = false
 	didRespondToPlanAskBySwitchingMode = false
-	
+
 	// 智能体类型：planner(计划智能体)或coder(代码智能体)
 	agentType?: string
-	
+
 	// streaming
 	isWaitingForFirstChunk = false
 	isStreaming = false
@@ -152,13 +152,13 @@ export class Agent {
 	private didAlreadyUseTool = false
 	private didCompleteReadingStream = false
 	private didAutomaticallyRetryFailedApiRequest = false
-	private isBusy = false;
+	private isBusy = false
 	// 简化后的消息队列
 	private messageQueue: Array<{
-		fromAgent: string,
-		message: string,
+		fromAgent: string
+		message: string
 		timestamp: number
-	}> = [];
+	}> = []
 
 	constructor(
 		provider: ClineProvider,
@@ -187,10 +187,10 @@ export class Agent {
 		this.autoApprovalSettings = autoApprovalSettings
 		this.browserSettings = browserSettings
 		this.chatSettings = chatSettings
-		
+
 		// 设置智能体类型
 		this.agentType = agentType
-		
+
 		// 如果是代码智能体，设置关联的计划智能体ID
 		if (historyItem) {
 			this.taskId = historyItem.id
@@ -223,7 +223,6 @@ export class Agent {
 		this.chatSettings = chatSettings
 	}
 
-	
 	private async ensureTaskDirectoryExists(): Promise<string> {
 		const globalStoragePath = this.providerRef.deref()?.context.globalStorageUri.fsPath
 		if (!globalStoragePath) {
@@ -746,17 +745,15 @@ export class Agent {
 		this.askResponse = undefined
 		this.askResponseText = undefined
 		this.askResponseImages = undefined
-		this.isBusy = false;
+		this.isBusy = false
 		if (!partial) {
-			await this.processMessageQueue();
+			await this.processMessageQueue()
 		}
 		return result
 	}
 
-
-	
 	async handleWebviewAskResponse(askResponse: ClineAskResponse, text?: string, images?: string[]) {
-		this.isBusy = true;
+		this.isBusy = true
 		this.askResponse = askResponse
 		this.askResponseText = text
 		this.askResponseImages = images
@@ -876,7 +873,7 @@ export class Agent {
 		this.isInitialized = true
 
 		// 根据智能体类型选择不同的启动路径
-		if (this.agentType === 'coder') {
+		if (this.agentType === "coder") {
 			// 代码智能体特有启动逻辑
 			await this.startCoderTask(task, images)
 		} else {
@@ -884,7 +881,7 @@ export class Agent {
 			await this.startPlannerTask(task, images)
 		}
 	}
-	
+
 	/**
 	 * 启动计划智能体任务
 	 * 包含创建检查点等标准流程
@@ -902,15 +899,14 @@ export class Agent {
 			true,
 		)
 	}
-	
+
 	/**
 	 * 启动代码智能体任务
 	 * 由计划智能体触发，处理特定的代码编写或修改任务
 	 */
 	private async startCoderTask(task?: string, images?: string[]): Promise<void> {
-		
 		let imageBlocks: Anthropic.ImageBlockParam[] = formatResponse.imageBlocks(images)
-		
+
 		// 为代码智能体任务增加特殊的提示信息
 		await this.initiateTaskLoop(
 			[
@@ -922,7 +918,7 @@ export class Agent {
 			],
 			true,
 		)
-		
+
 		// 代码智能体使用相同的initiateTaskLoop，但后续会有不同的处理逻辑
 		// 例如，可能不创建检查点，或者完成后会将结果发送回计划智能体
 	}
@@ -965,6 +961,8 @@ export class Agent {
 		// Now present the cline messages to the user and ask if they want to resume (NOTE: we ran into a bug before where the apiconversationhistory wouldnt be initialized when opening a old task, and it was because we were waiting for resume)
 		// This is important in case the user deletes messages without resuming the task first
 		this.apiConversationHistory = await this.getSavedApiConversationHistory()
+
+		console.log(this.apiConversationHistory)
 
 		const lastClineMessage = this.clineMessages
 			.slice()
@@ -1368,9 +1366,9 @@ export class Agent {
 
 		// 使用计划智能体提示词
 		let systemPrompt = ""
-		if (this.agentType === 'planner') {
+		if (this.agentType === "planner") {
 			systemPrompt = await PLANNER_AGENT_PROMPT(cwd, this.browserSettings)
-		} else if (this.agentType === 'coder') {
+		} else if (this.agentType === "coder") {
 			systemPrompt = await CODER_AGENT_PROMPT(cwd, this.browserSettings)
 		}
 		let settingsCustomInstructions = this.customInstructions?.trim()
@@ -1428,12 +1426,12 @@ export class Agent {
 		) {
 			// 使用新的方式调用addUserInstructions
 			const allCustomInstructions = addUserInstructions(
-				settingsCustomInstructions || '',
+				settingsCustomInstructions || "",
 				clineRulesFileInstructions,
 				clineIgnoreInstructions,
 				preferredLanguageInstructions,
 			)
-			
+
 			if (allCustomInstructions) {
 				systemPrompt = addUserInstructions(systemPrompt, allCustomInstructions)
 			}
@@ -1553,7 +1551,7 @@ export class Agent {
 		}
 
 		const block = cloneDeep(this.assistantMessageContent[this.currentStreamingContentIndex]) // need to create copy bc while stream is updating the array, it could be updating the reference block properties too
-        //12345
+		//12345
 		console.log("block", block)
 		switch (block.type) {
 			case "text": {
@@ -1612,7 +1610,7 @@ export class Agent {
 				await this.say("text", content, undefined, block.partial)
 				break
 			}
-			
+
 			case "tool_use":
 				const toolDescription = () => {
 					switch (block.name) {
@@ -1765,13 +1763,13 @@ export class Agent {
 					case "communicate_with_agent": {
 						const targetAgent: string | undefined = block.params.target_agent
 						const message: string | undefined = block.params.message
-						
+
 						const sharedMessageProps = {
 							tool: "communicateWithAgent",
 							targetAgent: removeClosingTag("target_agent", targetAgent),
-							message: removeClosingTag("message", message)
+							message: removeClosingTag("message", message),
 						}
-						
+
 						try {
 							if (block.partial) {
 								const partialMessage = JSON.stringify(sharedMessageProps)
@@ -1782,63 +1780,63 @@ export class Agent {
 									this.removeLastPartialMessageIfExistsWithType("say", "tool")
 									await this.ask("tool", partialMessage, block.partial).catch(() => {})
 								}
-								break;
+								break
 							}
-							
+
 							// 参数验证
 							if (!targetAgent) {
 								this.consecutiveMistakeCount++
 								pushToolResult(await this.sayAndCreateMissingParamError("communicate_with_agent", "target_agent"))
-								break;
+								break
 							}
-							
+
 							if (!message) {
 								this.consecutiveMistakeCount++
 								pushToolResult(await this.sayAndCreateMissingParamError("communicate_with_agent", "message"))
-								break;
+								break
 							}
-							
+
 							this.consecutiveMistakeCount = 0
-							
+
 							// 获取目标智能体
 							const provider = this.providerRef.deref()
 							if (!provider) {
 								throw new Error("无法获取ClineProvider实例")
 							}
-							
+
 							// 获取目标智能体实例
 							const targetAgentInstance = await provider.getAgent(targetAgent)
 							if (!targetAgentInstance) {
 								throw new Error(`找不到 ${targetAgent} 智能体`)
 							}
-							
+
 							// 发送消息给目标智能体
-							await targetAgentInstance.handleMessage(this.agentType+this.taskId, message)
-							
+							await targetAgentInstance.handleMessage(this.agentType + this.taskId, message)
+
 							// 推送结果
 							pushToolResult(`消息已成功发送给智能体 ${targetAgent}`)
-							
-							break;
+
+							break
 						} catch (error) {
 							await handleError("与智能体通信", error)
-							break;
+							break
 						}
 					}
 					case "create_coder_agent":
 						try {
 							const { task_description, code_style, requirements } = block.params
-							
+
 							// 处理部分参数的情况（流式输出）
 							if (block.partial) {
 								const sharedMessageProps = {
 									tool: "create_coder_agent",
 									task_description: removeClosingTag("task_description", task_description),
 									code_style: removeClosingTag("code_style", code_style),
-									requirements: removeClosingTag("requirements", requirements)
+									requirements: removeClosingTag("requirements", requirements),
 								}
-								
+
 								const partialMessage = JSON.stringify(sharedMessageProps)
-								
+
 								if (this.shouldAutoApproveTool(block.name)) {
 									this.removeLastPartialMessageIfExistsWithType("ask", "tool")
 									await this.say("tool", partialMessage, undefined, block.partial)
@@ -1848,36 +1846,36 @@ export class Agent {
 								}
 								break
 							}
-							
+
 							// 验证必要参数
 							if (!task_description) {
 								this.consecutiveMistakeCount++
 								pushToolResult(await this.sayAndCreateMissingParamError("create_coder_agent", "task_description"))
 								break
 							}
-							
+
 							if (!code_style) {
 								this.consecutiveMistakeCount++
 								pushToolResult(await this.sayAndCreateMissingParamError("create_coder_agent", "code_style"))
 								break
 							}
-							
+
 							if (!requirements) {
 								this.consecutiveMistakeCount++
 								pushToolResult(await this.sayAndCreateMissingParamError("create_coder_agent", "requirements"))
 								break
 							}
-							
+
 							// 重置错误计数
 							this.consecutiveMistakeCount = 0
-							
+
 							// 询问用户是否批准创建代码智能体
 							const approvalMessage = `是否允许创建代码智能体来处理任务: "${task_description.substring(0, 50)}${
 								task_description.length > 50 ? "..." : ""
 							}"?`
-							
+
 							showNotificationForApprovalIfAutoApprovalEnabled(approvalMessage)
-							
+
 							// 如果自动批准设置已启用，并且未达到最大自动批准请求数
 							let approved = false
 							if (
@@ -1891,56 +1889,58 @@ export class Agent {
 							} else {
 								// 重置自动批准计数
 								this.consecutiveAutoApprovedRequestsCount = 0
-								
+
 								// 使用完整任务描述
 								const fullApprovalMessage = `是否允许创建代码智能体来处理任务: "${task_description}"?`
-								
+
 								// 请求用户批准
 								approved = await askApproval("command", fullApprovalMessage)
 								if (!approved) {
 									break
 								}
 							}
-							
+
 							// 如果获得批准，创建代码智能体
 							if (approved) {
 								try {
 									// 格式化任务描述，整合三个参数
-									const formattedTask = formatCoderTask(task_description, code_style, requirements);
-									
+									const formattedTask = formatCoderTask(task_description, code_style, requirements)
+
 									// 获取ClineProvider实例
-									const provider = this.providerRef.deref();
+									const provider = this.providerRef.deref()
 									if (!provider) {
-										throw new Error("无法获取ClineProvider实例");
+										throw new Error("无法获取ClineProvider实例")
 									}
-									
+
 									// 创建coder智能体
-									const coderAgentId = await provider.createCoderAgent(formattedTask);
-									
+									const coderAgentId = await provider.createCoderAgent(formattedTask)
+
 									// 发送成功消息
-									const successMessage = `已成功创建代码智能体（ID: ${coderAgentId}）。该智能体将在新标签页中显示。`;
-									await this.say("text", successMessage);
-									
+									const successMessage = `已成功创建代码智能体（ID: ${coderAgentId}）。该智能体将在新标签页中显示。`
+									await this.say("text", successMessage)
+
 									// 将工具结果添加到userMessageContent
-									pushToolResult([{
-										type: "text",
-										text: successMessage,
-									}]);
-									
+									pushToolResult([
+										{
+											type: "text",
+											text: successMessage,
+										},
+									])
+
 									// 通知用户界面刷新状态
-									await provider.postStateToWebview();
+									await provider.postStateToWebview()
 								} catch (error) {
 									// 错误处理
-									const errorMessage = `创建代码智能体失败: ${error instanceof Error ? error.message : String(error)}`;
-									await this.say("error", errorMessage);
-									pushToolResult(formatResponse.toolError(errorMessage));
+									const errorMessage = `创建代码智能体失败: ${error instanceof Error ? error.message : String(error)}`
+									await this.say("error", errorMessage)
+									pushToolResult(formatResponse.toolError(errorMessage))
 								}
 							}
 						} catch (error) {
 							await handleError("创建代码智能体", error instanceof Error ? error : new Error(String(error)))
 						}
 						break
-		
+
 					case "write_to_file":
 					case "replace_in_file": {
 						const relPath: string | undefined = block.params.path
@@ -3891,35 +3891,32 @@ export class Agent {
 	public async handleMessage(fromAgent: string, message: string) {
 		if (this.isBusy) {
 			// 如果智能体正忙,将消息添加到队列
-			await this.addMessageToQueue(fromAgent, message);
+			await this.addMessageToQueue(fromAgent, message)
 		} else {
 			// 如果智能体空闲,直接处理消息
 			await this.handleWebviewAskResponse(
 				"messageResponse",
-				`<message from="${fromAgent}" ts="${Date.now()}">${message}</message>`
-			);
+				`<message from="${fromAgent}" ts="${Date.now()}">${message}</message>`,
+			)
 		}
 	}
 
 	// 简化后的消息队列处理方法
 	private async processMessageQueue() {
 		if (this.messageQueue.length === 0) {
-			return;
+			return
 		}
 
-		const nextMessage = this.messageQueue.shift();
+		const nextMessage = this.messageQueue.shift()
 		if (nextMessage) {
 			// 格式化消息
 			const formattedMessage = `
 				<message from="${nextMessage.fromAgent}" ts="${nextMessage.timestamp}">
 				${nextMessage.message}
-				</message>`;
+				</message>`
 
 			// 使用正常的消息处理流程
-			await this.handleWebviewAskResponse(
-				"messageResponse",
-				formattedMessage
-			);
+			await this.handleWebviewAskResponse("messageResponse", formattedMessage)
 		}
 	}
 
@@ -3928,7 +3925,7 @@ export class Agent {
 		this.messageQueue.push({
 			fromAgent,
 			message,
-			timestamp: Date.now()
-		});
+			timestamp: Date.now(),
+		})
 	}
 }

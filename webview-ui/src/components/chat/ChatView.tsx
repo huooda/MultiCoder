@@ -33,16 +33,22 @@ interface ChatViewProps {
 	showAnnouncement: boolean
 	hideAnnouncement: () => void
 	showHistoryView: () => void
-	messageSource?: 'planner' | 'coder'
+	messageSource?: "planner" | "coder"
 }
 
 export const MAX_IMAGES_PER_MESSAGE = 20 // Anthropic limits to 20 images
 
-const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryView, messageSource = 'planner' }: ChatViewProps) => {
+const ChatView = ({
+	isHidden,
+	showAnnouncement,
+	hideAnnouncement,
+	showHistoryView,
+	messageSource = "planner",
+}: ChatViewProps) => {
 	const { version, clineMessages, coderMessages, taskHistory, apiConfiguration, telemetrySetting } = useExtensionState()
-	
+
 	// 根据messageSource选择要显示的消息
-	const messages = messageSource === 'planner' ? clineMessages : coderMessages;
+	const messages = messageSource === "planner" ? clineMessages : coderMessages
 
 	//const task = messages.length > 0 ? (messages[0].say === "task" ? messages[0] : undefined) : undefined) : undefined
 	const task = useMemo(() => messages.at(0), [messages])
@@ -773,7 +779,7 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 				display: isHidden ? "none" : "flex",
 				flexDirection: "column",
 				overflow: "hidden",
-				paddingTop: "40px"
+				paddingTop: "40px",
 			}}>
 			{task ? (
 				// <TaskHeader
@@ -845,15 +851,14 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 			)}
 
 			{task && (
-				<div 
+				<div
 					ref={scrollContainerRef}
-					style={{ 
+					style={{
 						flex: "1 1 auto",
 						display: "flex",
 						marginTop: "10px",
-						flexDirection: "column"
-					}}
-				>
+						flexDirection: "column",
+					}}>
 					<Virtuoso
 						ref={virtuosoRef}
 						key={task.ts}
@@ -861,7 +866,7 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 						style={{
 							flex: "1 1 auto",
 							overflowY: "scroll",
-							paddingTop: "10px"
+							paddingTop: "10px",
 						}}
 						components={{
 							Footer: () => <div style={{ height: 5 }} />, // Add empty padding at the bottom
@@ -885,15 +890,17 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 					/>
 					<AutoApproveMenu />
 					{showScrollToBottom ? (
-						<div style={{
-							position: "absolute",
-							bottom: "20px",
-							right: "20px"
-						}}>
-							<ScrollToBottomButton onClick={() => {
-								scrollToBottomSmooth()
-								disableAutoScrollRef.current = false
+						<div
+							style={{
+								position: "absolute",
+								bottom: "20px",
+								right: "20px",
 							}}>
+							<ScrollToBottomButton
+								onClick={() => {
+									scrollToBottomSmooth()
+									disableAutoScrollRef.current = false
+								}}>
 								<span className="codicon codicon-chevron-down" style={{ fontSize: "18px" }}></span>
 							</ScrollToBottomButton>
 						</div>

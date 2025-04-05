@@ -122,7 +122,7 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 	private disposables: vscode.Disposable[] = []
 	private view?: vscode.WebviewView | vscode.WebviewPanel
 	private planner?: Agent
-	private coder?: Agent  // 添加coder属性
+	private coder?: Agent // 添加coder属性
 	private agents: string[] = []
 	workspaceTracker?: WorkspaceTracker
 	mcpHub?: McpHub
@@ -282,24 +282,24 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 
 	async initClineWithTask(task?: string, images?: string[]) {
 		await this.clearTask()
-			const { apiConfiguration, customInstructions, autoApprovalSettings, browserSettings, chatSettings } =
-				await this.getState()
-			this.agents = []
-			this.planner = new Agent(
-				this,
-				apiConfiguration,
-				autoApprovalSettings,
-				browserSettings,
-				chatSettings,
-				'planner',   // 默认为计划智能体
-				customInstructions,
-				task,        // 直接传入任务
-				images       // 直接传入图片
-			)
-			if (!this.agents.includes(this.planner.taskId)) {
-				this.agents.push(this.planner.taskId);
-			}
+		const { apiConfiguration, customInstructions, autoApprovalSettings, browserSettings, chatSettings } =
+			await this.getState()
+		this.agents = []
+		this.planner = new Agent(
+			this,
+			apiConfiguration,
+			autoApprovalSettings,
+			browserSettings,
+			chatSettings,
+			"planner", // 默认为计划智能体
+			customInstructions,
+			task, // 直接传入任务
+			images, // 直接传入图片
+		)
+		if (!this.agents.includes(this.planner.taskId)) {
+			this.agents.push(this.planner.taskId)
 		}
+	}
 
 	async initClineWithHistoryItem(historyItem: HistoryItem) {
 		await this.clearTask()
@@ -315,9 +315,9 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 				chatSettings,
 				historyItem.agentType,
 				customInstructions,
-				undefined,  // 不传递任务
-				undefined,  // 不传递图片
-				historyItem  // 传递历史记录
+				undefined, // 不传递任务
+				undefined, // 不传递图片
+				historyItem, // 传递历史记录
 			)
 		}
 		if (historyItem.agentType === "coder") {
@@ -329,12 +329,11 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 				chatSettings,
 				historyItem.agentType,
 				customInstructions,
-				undefined,  // 不传递任务
-				undefined,  // 不传递图片
-				historyItem  // 传递历史记录
+				undefined, // 不传递任务
+				undefined, // 不传递图片
+				historyItem, // 传递历史记录
 			)
 		}
-
 	}
 
 	// Send any JSON serializable data to the react app
@@ -611,7 +610,7 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 					// 	}
 					// 	break
 					case "askResponse":
-						console.log('askResponse', message)
+						console.log("askResponse", message)
 						this.planner?.handleWebviewAskResponse(message.askResponse!, message.text, message.images)
 						break
 					case "clearTask":
@@ -1777,16 +1776,16 @@ Here is the project's README to help you get started:\n\n${mcpDetails.readmeCont
 	async showTaskWithId(id: string) {
 		if (id !== this.planner?.taskId) {
 			// 非当前任务
-			const { historyItem } = await this.getTaskWithId(id);
+			const { historyItem } = await this.getTaskWithId(id)
 			// 使用新的方法初始化智能体
-			await this.initAgentsWithHistoryItem(historyItem);
+			await this.initAgentsWithHistoryItem(historyItem)
 		}
-		
+
 		// 通知webview切换到聊天视图
 		await this.postMessageToWebview({
 			type: "action",
 			action: "chatButtonClicked",
-		});
+		})
 	}
 
 	async exportTaskWithId(id: string) {
@@ -1891,8 +1890,10 @@ Here is the project's README to help you get started:\n\n${mcpDetails.readmeCont
 			version: this.context.extension?.packageJSON?.version ?? "",
 			apiConfiguration,
 			customInstructions,
-				uriScheme: vscode.env.uriScheme,
-			currentTaskItem: this.planner?.taskId ? (taskHistory || []).find((item) => item.id === this.planner?.taskId) : undefined,
+			uriScheme: vscode.env.uriScheme,
+			currentTaskItem: this.planner?.taskId
+				? (taskHistory || []).find((item) => item.id === this.planner?.taskId)
+				: undefined,
 			checkpointTrackerErrorMessage: this.planner?.checkpointTrackerErrorMessage,
 			clineMessages: this.planner?.clineMessages || [],
 			coderMessages: this.coder?.clineMessages || [],
@@ -2203,16 +2204,16 @@ Here is the project's README to help you get started:\n\n${mcpDetails.readmeCont
 	async updateTaskHistory(item: HistoryItem): Promise<HistoryItem[]> {
 		// 如果item没有agents，使用当前的agents
 		if (!item.agents || item.agents.length === 0) {
-			item.agents = [...this.agents];
+			item.agents = [...this.agents]
 		} else {
 			// 合并现有agents和当前agents，确保不重复
-			this.agents.forEach(agentId => {
+			this.agents.forEach((agentId) => {
 				if (!item.agents!.includes(agentId)) {
-					item.agents!.push(agentId);
+					item.agents!.push(agentId)
 				}
-			});
+			})
 		}
-		
+
 		const history = ((await this.getGlobalState("taskHistory")) as HistoryItem[]) || []
 		const existingItemIndex = history.findIndex((h) => h.id === item.id)
 		if (existingItemIndex !== -1) {
@@ -2359,8 +2360,9 @@ Here is the project's README to help you get started:\n\n${mcpDetails.readmeCont
 
 	// 添加创建coder智能体的方法
 	async createCoderAgent(formattedTask: string): Promise<string> {
-		const { apiConfiguration, customInstructions, autoApprovalSettings, browserSettings, chatSettings } = await this.getState();
-		
+		const { apiConfiguration, customInstructions, autoApprovalSettings, browserSettings, chatSettings } =
+			await this.getState()
+
 		// 创建一个新的Agent实例，指定agentType为'coder'
 		this.coder = new Agent(
 			this,
@@ -2368,38 +2370,37 @@ Here is the project's README to help you get started:\n\n${mcpDetails.readmeCont
 			autoApprovalSettings,
 			browserSettings,
 			chatSettings,
-			'coder',  // 设置agentType为'coder'
+			"coder", // 设置agentType为'coder'
 			customInstructions,
-			formattedTask // 使用合并后的完整任务
-		);
+			formattedTask, // 使用合并后的完整任务
+		)
 		if (!this.agents.includes(this.coder.taskId)) {
-			this.agents.push(this.coder.taskId);
+			this.agents.push(this.coder.taskId)
 		}
 		// 返回coder的taskId
-		return this.coder.taskId;
+		return this.coder.taskId
 	}
 
 	// 添加这个新函数
 	async initAgentsWithHistoryItem(historyItem: HistoryItem) {
-		await this.clearTask(); // 首先清除当前任务
+		await this.clearTask() // 首先清除当前任务
 		// 将主智能体ID添加到agents数组
 		this.agents = historyItem.agents || []
 		if (!this.agents.includes(historyItem.id)) {
-			this.agents.push(historyItem.id);
+			this.agents.push(historyItem.id)
 		}
-		
+
 		// 检查并初始化关联智能体
 		if (historyItem.agents && historyItem.agents.length > 0) {
 			// 遍历agents数组中的每个智能体ID
 			for (const agentId of historyItem.agents) {
 				try {
-					
 					// 获取关联智能体的历史记录
-					const { historyItem: agentHistoryItem } = await this.getTaskWithId(agentId);
-					
+					const { historyItem: agentHistoryItem } = await this.getTaskWithId(agentId)
+
 					this.initClineWithHistoryItem(agentHistoryItem)
 				} catch (error) {
-					console.error(`Failed to initialize agent ${agentId}:`, error);
+					console.error(`Failed to initialize agent ${agentId}:`, error)
 				}
 			}
 		}
@@ -2407,22 +2408,21 @@ Here is the project's README to help you get started:\n\n${mcpDetails.readmeCont
 
 	async getAgent(agentName: string) {
 		// 检查是否以planner开头
-		if (agentName.startsWith('planner')) {
-			return this.planner;
+		if (agentName.startsWith("planner")) {
+			return this.planner
 		}
-		
+
 		// 检查是否以coder开头
-		if (agentName.startsWith('coder')) {
+		if (agentName.startsWith("coder")) {
 			// 由于当前设计只有一个coder,直接返回this.coder
-			return this.coder;
-			
+			return this.coder
+
 			// 如果未来需要支持多个coder,可以这样获取id:
 			// const coderId = agentName.substring('coder'.length);
 			// return this.coders.get(coderId);
 		}
-		
-		// 如果都不匹配,返回undefined
-		return undefined;
-	}
 
+		// 如果都不匹配,返回undefined
+		return undefined
+	}
 }

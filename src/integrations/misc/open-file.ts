@@ -39,7 +39,7 @@ export async function openFile(absolutePath: string) {
 					break
 				}
 			}
-		} catch { } // not essential, sometimes tab operations fail
+		} catch {} // not essential, sometimes tab operations fail
 
 		const document = await vscode.workspace.openTextDocument(uri)
 		await vscode.window.showTextDocument(document, { preview: false })

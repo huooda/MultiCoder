@@ -7,34 +7,34 @@ export function addUserInstructions(
 	systemPromptOrCustomInstructions: string,
 	clineRulesFileInstructions?: string,
 	clineIgnoreInstructions?: string,
-	preferredLanguageInstructions?: string
+	preferredLanguageInstructions?: string,
 ): string {
 	// 兼容两种调用方式
 	// 1. addUserInstructions(systemPrompt, customInstructions) - 新方式
 	// 2. addUserInstructions(customInstructions, clineRulesFileInstructions, clineIgnoreInstructions, preferredLanguageInstructions) - 旧方式
-	
-	if (arguments.length === 2 && typeof arguments[1] === 'string') {
+
+	if (arguments.length === 2 && typeof arguments[1] === "string") {
 		// 新方式调用
-		const systemPrompt = arguments[0] as string;
-		const customInstructions = arguments[1] as string;
-		if (!customInstructions) return systemPrompt;
-		return `${systemPrompt}\n\n==== USER CUSTOM INSTRUCTIONS ====\n\n${customInstructions}`;
+		const systemPrompt = arguments[0] as string
+		const customInstructions = arguments[1] as string
+		if (!customInstructions) return systemPrompt
+		return `${systemPrompt}\n\n==== USER CUSTOM INSTRUCTIONS ====\n\n${customInstructions}`
 	} else {
 		// 旧方式调用 - 将所有指令合并
-		let allInstructions = ''
+		let allInstructions = ""
 		if (systemPromptOrCustomInstructions) {
-			allInstructions += systemPromptOrCustomInstructions + '\n\n'
+			allInstructions += systemPromptOrCustomInstructions + "\n\n"
 		}
 		if (clineRulesFileInstructions) {
-			allInstructions += clineRulesFileInstructions + '\n\n'
+			allInstructions += clineRulesFileInstructions + "\n\n"
 		}
 		if (clineIgnoreInstructions) {
-			allInstructions += clineIgnoreInstructions + '\n\n'
+			allInstructions += clineIgnoreInstructions + "\n\n"
 		}
 		if (preferredLanguageInstructions) {
 			allInstructions += preferredLanguageInstructions
 		}
-		
+
 		return allInstructions.trim()
 	}
 }
@@ -263,4 +263,4 @@ export const PLANNER_AGENT_PROMPT = async (
 
 ====
 
-你的首要任务是分析用户需求，设计解决方案，并协调代码智能体的工作。直接且清晰地回应用户的要求，避免以"好的"、"确定"等冗余词语开始你的回应。` 
+你的首要任务是分析用户需求，设计解决方案，并协调代码智能体的工作。直接且清晰地回应用户的要求，避免以"好的"、"确定"等冗余词语开始你的回应。`
