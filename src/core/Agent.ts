@@ -1884,8 +1884,6 @@ export class Agent {
 							) {
 								approved = true
 								this.consecutiveAutoApprovedRequestsCount++
-								// 不显示自动批准的提示，但显示完整任务描述
-								await this.say("text", `将创建代码智能体来处理任务："${task_description}"`)
 							} else {
 								// 重置自动批准计数
 								this.consecutiveAutoApprovedRequestsCount = 0
