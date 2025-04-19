@@ -33,7 +33,7 @@ interface ChatViewProps {
 	showAnnouncement: boolean
 	hideAnnouncement: () => void
 	showHistoryView: () => void
-	messageSource?: "planner" | "coder"
+	messageSource?: "planner" | "coder" | "tester"
 }
 
 export const MAX_IMAGES_PER_MESSAGE = 20 // Anthropic limits to 20 images
@@ -45,11 +45,18 @@ const ChatView = ({
 	showHistoryView,
 	messageSource = "planner",
 }: ChatViewProps) => {
-	const { version, clineMessages, coderMessages, taskHistory, apiConfiguration, telemetrySetting } = useExtensionState()
+	const { version, plannerMessages, coderMessages, testerMessages, taskHistory, apiConfiguration, telemetrySetting } =
+		useExtensionState()
 
 	// 根据messageSource选择要显示的消息
-	const messages = messageSource === "planner" ? clineMessages : coderMessages
-
+	let messages: ClineMessage[] = []
+	if (messageSource === "planner") {
+		messages = plannerMessages
+	} else if (messageSource === "coder") {
+		messages = coderMessages
+	} else if (messageSource === "tester") {
+		messages = testerMessages
+	}
 	//const task = messages.length > 0 ? (messages[0].say === "task" ? messages[0] : undefined) : undefined) : undefined
 	const task = useMemo(() => messages.at(0), [messages])
 	const modifiedMessages = useMemo(() => combineApiRequests(combineCommandSequences(messages)), [messages])

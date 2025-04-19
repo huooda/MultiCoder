@@ -123,6 +123,7 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 	private view?: vscode.WebviewView | vscode.WebviewPanel
 	private planner?: Agent
 	private coder?: Agent // 添加coder属性
+	private tester?: Agent
 	private agents: string[] = []
 	workspaceTracker?: WorkspaceTracker
 	mcpHub?: McpHub
@@ -322,6 +323,20 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 		}
 		if (historyItem.agentType === "coder") {
 			this.coder = new Agent(
+				this,
+				apiConfiguration,
+				autoApprovalSettings,
+				browserSettings,
+				chatSettings,
+				historyItem.agentType,
+				customInstructions,
+				undefined, // 不传递任务
+				undefined, // 不传递图片
+				historyItem, // 传递历史记录
+			)
+		}
+		if (historyItem.agentType === "tester") {
+			this.tester = new Agent(
 				this,
 				apiConfiguration,
 				autoApprovalSettings,
@@ -1895,8 +1910,9 @@ Here is the project's README to help you get started:\n\n${mcpDetails.readmeCont
 				? (taskHistory || []).find((item) => item.id === this.planner?.taskId)
 				: undefined,
 			checkpointTrackerErrorMessage: this.planner?.checkpointTrackerErrorMessage,
-			clineMessages: this.planner?.clineMessages || [],
+			plannerMessages: this.planner?.clineMessages || [],
 			coderMessages: this.coder?.clineMessages || [],
+			testerMessages: this.tester?.clineMessages || [],
 			taskHistory: (taskHistory || [])
 				.filter((item) => item.ts && item.task && item.agentType === "planner")
 				.sort((a, b) => b.ts - a.ts)
@@ -1917,8 +1933,10 @@ Here is the project's README to help you get started:\n\n${mcpDetails.readmeCont
 	async clearTask() {
 		this.planner?.abortTask()
 		this.coder?.abortTask()
+		this.tester?.abortTask()
 		this.coder = undefined
 		this.planner = undefined // removes reference to it, so once promises end it will be garbage collected
+		this.tester = undefined
 	}
 
 	// Caching mechanism to keep track of webview messages + API conversation history per provider instance
@@ -2381,6 +2399,29 @@ Here is the project's README to help you get started:\n\n${mcpDetails.readmeCont
 		return this.coder.taskId
 	}
 
+	// 添加创建tester智能体的方法
+	async createTesterAgent(formattedTask: string): Promise<string> {
+		const { apiConfiguration, customInstructions, autoApprovalSettings, browserSettings, chatSettings } =
+			await this.getState()
+
+		// 创建一个新的Agent实例，指定agentType为'tester'
+		this.tester = new Agent(
+			this,
+			apiConfiguration,
+			autoApprovalSettings,
+			browserSettings,
+			chatSettings,
+			"tester", // 设置agentType为'tester'
+			customInstructions,
+			formattedTask, // 使用合并后的完整任务
+		)
+		if (!this.agents.includes(this.tester.taskId)) {
+			this.agents.push(this.tester.taskId)
+		}
+		// 返回tester的taskId
+		return this.tester.taskId
+	}
+
 	// 添加这个新函数
 	async initAgentsWithHistoryItem(historyItem: HistoryItem) {
 		await this.clearTask() // 首先清除当前任务
@@ -2406,7 +2447,7 @@ Here is the project's README to help you get started:\n\n${mcpDetails.readmeCont
 		}
 	}
 
-	async getAgent(agentName: string) {
+	async getAgent(agentName: string, message: string) {
 		// 检查是否以planner开头
 		if (agentName.startsWith("planner")) {
 			return this.planner
@@ -2414,12 +2455,38 @@ Here is the project's README to help you get started:\n\n${mcpDetails.readmeCont
 
 		// 检查是否以coder开头
 		if (agentName.startsWith("coder")) {
-			// 由于当前设计只有一个coder,直接返回this.coder
-			return this.coder
-
+			if (this.coder) {
+				return this.coder
+			} else {
+				try {
+					const coderAgentId = await this.createCoderAgent(message)
+					console.log(`Coder agent created with ID: ${coderAgentId}`)
+					return this.coder
+				} catch (error) {
+					console.error("Failed to create coder agent:", error)
+					return undefined
+				}
+			}
 			// 如果未来需要支持多个coder,可以这样获取id:
 			// const coderId = agentName.substring('coder'.length);
 			// return this.coders.get(coderId);
+		}
+
+		// 检查是否以tester开头
+		if (agentName.startsWith("tester")) {
+			// 由于当前设计只有一个tester
+			if (this.tester) {
+				return this.tester
+			} else {
+				try {
+					const testerAgentId = await this.createTesterAgent(message)
+					console.log(`Tester agent created with ID: ${testerAgentId}`)
+					return this.tester
+				} catch (error) {
+					console.error("Failed to create tester agent:", error)
+					return undefined
+				}
+			}
 		}
 
 		// 如果都不匹配,返回undefined

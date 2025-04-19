@@ -58,6 +58,7 @@ import { parseMentions } from "./mentions"
 import { formatResponse } from "./prompts/responses"
 import { PLANNER_AGENT_PROMPT, addUserInstructions } from "./prompts/planner_agent"
 import { CODER_AGENT_PROMPT } from "./prompts/coder_agent"
+import { TESTER_AGENT_PROMPT } from "./prompts/tester_agent"
 import { getNextTruncationRange, getTruncatedMessages } from "./sliding-window"
 import { OpenAiHandler } from "../api/providers/openai"
 import { ApiStream } from "../api/transform/stream"
@@ -876,8 +877,10 @@ export class Agent {
 		if (this.agentType === "coder") {
 			// 代码智能体特有启动逻辑
 			await this.startCoderTask(task, images)
-		} else {
+		} else if (this.agentType === "tester") {
 			// 默认为计划智能体的启动逻辑
+			await this.startTesterTask(task, images)
+		} else {
 			await this.startPlannerTask(task, images)
 		}
 	}
@@ -913,6 +916,25 @@ export class Agent {
 				{
 					type: "text",
 					text: `<task type="code">\n${task}\n</task>`,
+				},
+				...imageBlocks,
+			],
+			true,
+		)
+
+		// 代码智能体使用相同的initiateTaskLoop，但后续会有不同的处理逻辑
+		// 例如，可能不创建检查点，或者完成后会将结果发送回计划智能体
+	}
+
+	private async startTesterTask(task?: string, images?: string[]): Promise<void> {
+		let imageBlocks: Anthropic.ImageBlockParam[] = formatResponse.imageBlocks(images)
+
+		// 为代码智能体任务增加特殊的提示信息
+		await this.initiateTaskLoop(
+			[
+				{
+					type: "text",
+					text: `<task type="tester">\n${task}\n</task>`,
 				},
 				...imageBlocks,
 			],
@@ -1366,10 +1388,16 @@ export class Agent {
 
 		// 使用计划智能体提示词
 		let systemPrompt = ""
-		if (this.agentType === "planner") {
-			systemPrompt = await PLANNER_AGENT_PROMPT(cwd, this.browserSettings)
-		} else if (this.agentType === "coder") {
-			systemPrompt = await CODER_AGENT_PROMPT(cwd, this.browserSettings)
+		switch (this.agentType) {
+			case "planner":
+				systemPrompt = await PLANNER_AGENT_PROMPT(cwd, this.browserSettings)
+				break
+			case "coder":
+				systemPrompt = await CODER_AGENT_PROMPT(cwd, this.browserSettings)
+				break
+			case "tester":
+				systemPrompt = await TESTER_AGENT_PROMPT(cwd, this.browserSettings)
+				break
 		}
 		let settingsCustomInstructions = this.customInstructions?.trim()
 		const preferredLanguage = getLanguageKey(
@@ -1805,7 +1833,7 @@ export class Agent {
 							}
 
 							// 获取目标智能体实例
-							const targetAgentInstance = await provider.getAgent(targetAgent)
+							const targetAgentInstance = await provider.getAgent(targetAgent, message)
 							if (!targetAgentInstance) {
 								throw new Error(`找不到 ${targetAgent} 智能体`)
 							}

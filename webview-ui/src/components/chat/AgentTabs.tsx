@@ -90,25 +90,26 @@ export interface AgentTabsProps {
 interface AgentTab {
 	id: string
 	name: string
-	type: "planner" | "coder"
+	type: "planner" | "coder" | "tester"
 	icon: string
 	messageCount: number
 }
 
 const AgentTabs: React.FC<AgentTabsProps> = (props) => {
 	const extensionState = useExtensionState()
-	const { clineMessages, coderMessages } = extensionState
-	const [selectedTabId, setSelectedTabId] = useState<"planner" | "coder">("planner")
+	const { plannerMessages, coderMessages, testerMessages } = extensionState
+	const [selectedTabId, setSelectedTabId] = useState<"planner" | "coder" | "tester">("planner")
 
 	// 调试输出
 	useEffect(() => {
 		console.log("ExtensionState:", {
 			selectedTab: selectedTabId,
-			clineMessagesCount: clineMessages.length,
+			plannerMessagesCount: plannerMessages.length,
 			coderMessagesCount: coderMessages.length,
+			testerMessagesCount: testerMessages.length,
 			fullState: extensionState,
 		})
-	}, [selectedTabId, clineMessages, coderMessages, extensionState])
+	}, [selectedTabId, plannerMessages, coderMessages, testerMessages, extensionState])
 
 	// 固定的标签页配置
 	const tabs: AgentTab[] = [
@@ -117,7 +118,7 @@ const AgentTabs: React.FC<AgentTabsProps> = (props) => {
 			name: "Planner",
 			type: "planner",
 			icon: "🧠",
-			messageCount: clineMessages.length,
+			messageCount: plannerMessages.length,
 		},
 		{
 			id: "coder",
@@ -125,6 +126,13 @@ const AgentTabs: React.FC<AgentTabsProps> = (props) => {
 			type: "coder",
 			icon: "💻",
 			messageCount: coderMessages.length,
+		},
+		{
+			id: "tester",
+			name: "Tester",
+			type: "tester",
+			icon: "🔍",
+			messageCount: testerMessages.length,
 		},
 	]
 
@@ -140,7 +148,7 @@ const AgentTabs: React.FC<AgentTabsProps> = (props) => {
 					<TabButton
 						key={tab.id}
 						isActive={selectedTabId === tab.id}
-						onClick={() => setSelectedTabId(tab.id as "planner" | "coder")}>
+						onClick={() => setSelectedTabId(tab.id as "planner" | "coder" | "tester")}>
 						<AgentIcon>{tab.icon}</AgentIcon>
 						{tab.name}
 						{tab.messageCount > 0 && <MessageCount>{tab.messageCount}</MessageCount>}
