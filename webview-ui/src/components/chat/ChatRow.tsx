@@ -136,6 +136,33 @@ export const ChatRowContent = ({ message, isExpanded, onToggleExpand, lastModifi
 	const { mcpServers, mcpMarketplaceCatalog } = useExtensionState()
 	const [seeNewChangesDisabled, setSeeNewChangesDisabled] = useState(false)
 
+	// 检查消息是否为测试智能体的消息格式
+	const isAgentMessage = useMemo(() => {
+		if (message.type === "say" && message.say === "user_feedback" && message.text) {
+			return message.text.trim().startsWith("<message from=") && message.text.includes("</message>")
+		}
+		return false
+	}, [message])
+
+	// 解析智能体消息内容
+	const agentMessageInfo = useMemo(() => {
+		if (!isAgentMessage || !message.text) return null
+
+		const fromMatch = message.text.match(/from="([^"]+)"/)
+		const tsMatch = message.text.match(/ts="([^"]+)"/)
+
+		if (!fromMatch) return null
+
+		const from = fromMatch[1]
+		const ts = tsMatch ? tsMatch[1] : ""
+
+		// 提取消息内容 - 在<message>标签之间的内容
+		const contentMatch = message.text.match(/<message[^>]*>([\s\S]*?)<\/message>/)
+		const content = contentMatch ? contentMatch[1].trim() : ""
+
+		return { from, ts, content }
+	}, [isAgentMessage, message.text])
+
 	const [cost, apiReqCancelReason, apiReqStreamingFailedMessage] = useMemo(() => {
 		if (message.text != null && message.say === "api_req_started") {
 			const info: ClineApiReqInfo = JSON.parse(message.text)
@@ -177,6 +204,20 @@ export const ChatRowContent = ({ message, isExpanded, onToggleExpand, lastModifi
 	useEvent("message", handleMessage)
 
 	const [icon, title] = useMemo(() => {
+		// 如果是智能体消息，使用特殊图标和标题
+		if (isAgentMessage && agentMessageInfo) {
+			const agentIcon = (
+				<span className="codicon codicon-comment" style={{ color: normalColor, marginBottom: "-1.5px" }}></span>
+			)
+
+			return [
+				agentIcon,
+				<span style={{ color: normalColor, fontWeight: "bold" }}>
+					来自 {agentMessageInfo.from.replace(/\d+/g, "")} 的消息:
+				</span>,
+			]
+		}
+
 		switch (type) {
 			case "error":
 				return [
@@ -715,6 +756,27 @@ export const ChatRowContent = ({ message, isExpanded, onToggleExpand, lastModifi
 							)}
 						</>
 					)}
+				</div>
+			</>
+		)
+	}
+
+	// 在switch语句之前，检查是否是智能体消息
+	if (isAgentMessage && agentMessageInfo) {
+		return (
+			<>
+				<div style={headerStyle}>
+					{icon}
+					{title}
+				</div>
+				<div
+					style={{
+						backgroundColor: "var(--vscode-textCodeBlock-background)",
+						borderRadius: "3px",
+						padding: "10px",
+						marginTop: "8px",
+					}}>
+					<Markdown markdown={agentMessageInfo.content} />
 				</div>
 			</>
 		)
