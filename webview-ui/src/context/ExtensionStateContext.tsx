@@ -106,12 +106,29 @@ export const ExtensionStateContextProvider: React.FC<{
 				const partialMessage = message.partialMessage!
 				setState((prevState) => {
 					// worth noting it will never be possible for a more up-to-date message to be sent here or in normal messages post since the presentAssistantContent function uses lock
-					const lastIndex = findLastIndex(prevState.plannerMessages, (msg) => msg.ts === partialMessage.ts)
-					if (lastIndex !== -1) {
-						const newClineMessages = [...prevState.plannerMessages]
-						newClineMessages[lastIndex] = partialMessage
-						return { ...prevState, clineMessages: newClineMessages }
+					const plannerIndex = findLastIndex(prevState.plannerMessages, (msg) => msg.ts === partialMessage.ts)
+					if (plannerIndex !== -1) {
+						const newMessages = [...prevState.plannerMessages]
+						newMessages[plannerIndex] = partialMessage
+						return { ...prevState, plannerMessages: newMessages }
 					}
+
+					// 检查coderMessages
+					const coderIndex = findLastIndex(prevState.coderMessages, (msg) => msg.ts === partialMessage.ts)
+					if (coderIndex !== -1) {
+						const newMessages = [...prevState.coderMessages]
+						newMessages[coderIndex] = partialMessage
+						return { ...prevState, coderMessages: newMessages }
+					}
+
+					// 检查testerMessages
+					const testerIndex = findLastIndex(prevState.testerMessages, (msg) => msg.ts === partialMessage.ts)
+					if (testerIndex !== -1) {
+						const newMessages = [...prevState.testerMessages]
+						newMessages[testerIndex] = partialMessage
+						return { ...prevState, testerMessages: newMessages }
+					}
+
 					return prevState
 				})
 				break
