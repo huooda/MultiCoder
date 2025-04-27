@@ -2447,15 +2447,21 @@ Here is the project's README to help you get started:\n\n${mcpDetails.readmeCont
 		}
 	}
 
-	async getAgent(agentName: string, message: string) {
+	async sendMessageToAgent(fromAgent: string, agentName: string, message: string) {
 		// 检查是否以planner开头
 		if (agentName.startsWith("planner")) {
-			return this.planner
+			if (this.planner) {
+				this.planner.handleMessage(fromAgent, message)
+				return this.planner
+			} else {
+				return undefined
+			}
 		}
 
 		// 检查是否以coder开头
 		if (agentName.startsWith("coder")) {
 			if (this.coder) {
+				this.coder.handleMessage(fromAgent, message)
 				return this.coder
 			} else {
 				try {
@@ -2476,6 +2482,7 @@ Here is the project's README to help you get started:\n\n${mcpDetails.readmeCont
 		if (agentName.startsWith("tester")) {
 			// 由于当前设计只有一个tester
 			if (this.tester) {
+				this.tester.handleMessage(fromAgent, message)
 				return this.tester
 			} else {
 				try {

@@ -81,6 +81,9 @@ const AppContent = () => {
 		return null
 	}
 
+	// 检查是否有任何其他视图显示
+	const isOtherViewShowing = showSettings || showHistory || showMcp || showAccount
+
 	return (
 		<>
 			{showWelcome ? (
@@ -91,16 +94,19 @@ const AppContent = () => {
 					{showHistory && <HistoryView onDone={() => setShowHistory(false)} />}
 					{showMcp && <McpView onDone={() => setShowMcp(false)} />}
 					{showAccount && <AccountView onDone={() => setShowAccount(false)} />}
-					{/* Do not conditionally load AgentTabs, it's expensive and there's state we don't want to lose */}
-					<AgentTabs
-						showHistoryView={() => {
-							setShowSettings(false)
-							setShowMcp(false)
-							setShowHistory(true)
-						}}
-						showAnnouncement={showAnnouncement}
-						hideAnnouncement={() => setShowAnnouncement(false)}
-					/>
+					{/* 虽然我们不想条件性地加载AgentTabs，但当其他视图显示时应该使其不可见 */}
+					<div style={{ display: isOtherViewShowing ? "none" : "block" }}>
+						<AgentTabs
+							showHistoryView={() => {
+								setShowSettings(false)
+								setShowMcp(false)
+								setShowHistory(true)
+							}}
+							showAnnouncement={showAnnouncement}
+							hideAnnouncement={() => setShowAnnouncement(false)}
+							isHidden={isOtherViewShowing}
+						/>
+					</div>
 				</>
 			)}
 		</>

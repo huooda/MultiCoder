@@ -17,7 +17,6 @@ export const formatResponse = {
 ${toolUseInstructionsReminder}
 
 # 下一步
-你的每次回复都必须在末尾使用工具。
 如果你已完成用户的任务，请使用 attempt_completion 工具。
 如果你需要用户提供更多信息，请使用 ask_followup_question 工具。
 否则，如果你还没有完成任务且不需要额外信息，那么请继续执行任务的下一步。

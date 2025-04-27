@@ -1833,14 +1833,14 @@ export class Agent {
 							}
 
 							// 获取目标智能体实例
-							const targetAgentInstance = await provider.getAgent(targetAgent, message)
+							const targetAgentInstance = await provider.sendMessageToAgent(
+								this.agentType + this.taskId,
+								targetAgent,
+								message,
+							)
 							if (!targetAgentInstance) {
 								throw new Error(`找不到 ${targetAgent} 智能体`)
 							}
-
-							// 发送消息给目标智能体
-							await targetAgentInstance.handleMessage(this.agentType + this.taskId, message)
-
 							// 推送结果
 							pushToolResult(`消息已成功发送给智能体 ${targetAgent}`)
 
@@ -3917,8 +3917,10 @@ export class Agent {
 	public async handleMessage(fromAgent: string, message: string) {
 		if (this.isBusy) {
 			// 如果智能体正忙,将消息添加到队列
+			console.log("handleMessage: 智能体正忙,将消息添加到队列")
 			await this.addMessageToQueue(fromAgent, message)
 		} else {
+			console.log("handleMessage: 智能体空闲,直接处理消息")
 			// 如果智能体空闲,直接处理消息
 			await this.handleWebviewAskResponse(
 				"messageResponse",
