@@ -1515,7 +1515,7 @@ export class Agent {
 			this.apiConversationHistory,
 			this.conversationHistoryDeletedRange,
 		)
-
+		console.log("truncatedConversationHistory", truncatedConversationHistory)
 		let stream = this.api.createMessage(systemPrompt, truncatedConversationHistory)
 
 		const iterator = stream[Symbol.asyncIterator]()

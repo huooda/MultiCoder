@@ -1131,7 +1131,8 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 							)}
 						</ModelContainer>
 					</ButtonGroup>
-					<Tooltip
+					{/* 注释掉Plan和Act切换按钮的显示，保持其功能逻辑不变 */}
+					{/* <Tooltip
 						style={{ zIndex: 1000 }}
 						visible={shownTooltipMode !== null}
 						tipText={`In ${shownTooltipMode === "act" ? "Act" : "Plan"}  mode, Cline will ${shownTooltipMode === "act" ? "complete the task immediately" : "gather information to architect a plan"}`}
@@ -1151,7 +1152,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 								Act
 							</SwitchOption>
 						</SwitchContainer>
-					</Tooltip>
+					</Tooltip> */}
 				</ControlsContainer>
 			</div>
 		)
