@@ -92,7 +92,9 @@ ${requirements}
  * @returns 处理后的参数值
  */
 function removeClosingTag(paramName: string, value?: string): string {
-	if (!value) return ""
+	if (!value) {
+		return ""
+	}
 
 	// 移除可能的XML闭合标签
 	const closingTagRegex = new RegExp(`</${paramName}>$`)

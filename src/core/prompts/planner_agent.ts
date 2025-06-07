@@ -17,7 +17,9 @@ export function addUserInstructions(
 		// 新方式调用
 		const systemPrompt = arguments[0] as string
 		const customInstructions = arguments[1] as string
-		if (!customInstructions) return systemPrompt
+		if (!customInstructions) {
+			return systemPrompt
+		}
 		return `${systemPrompt}\n\n==== USER CUSTOM INSTRUCTIONS ====\n\n${customInstructions}`
 	} else {
 		// 旧方式调用 - 将所有指令合并

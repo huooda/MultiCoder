@@ -1,190 +1,112 @@
-<div align="center"><sub>
-English | <a href="https://github.com/cline/cline/blob/main/locales/es/README.md" target="_blank">Español</a> | <a href="https://github.com/cline/cline/blob/main/locales/de/README.md" target="_blank">Deutsch</a> | <a href="https://github.com/cline/cline/blob/main/locales/ja/README.md" target="_blank">日本語</a> | <a href="https://github.com/cline/cline/blob/main/locales/zh-cn/README.md" target="_blank">简体中文</a> | <a href="https://github.com/cline/cline/blob/main/locales/zh-tw/README.md" target="_blank">繁體中文</a> | <a href="https://github.com/cline/cline/blob/main/locales/ko/README.md" target="_blank">한국어</a>
-</sub></div>
+# MultiCoder: Your Multi-Agent Collaborative Coding Assistant
 
-# Cline – \#1 on OpenRouter
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![GitHub Repository](https://img.shields.io/badge/GitHub-Repository-blue?style=flat-square&logo=github)](https://github.com/cline/cline)
 
-<p align="center">
-  <img src="https://media.githubusercontent.com/media/cline/cline/main/assets/docs/demo.gif" width="100%" />
-</p>
+**MultiCoder is a multi-agent collaborative code editor based on Cline. It leverages a team of AI agents, including a Planner, a Coder, and a Tester, to autonomously understand requirements, write code, and verify the results.**
 
-<div align="center">
-<table>
-<tbody>
-<td align="center">
-<a href="https://marketplace.visualstudio.com/items?itemName=saoudrizwan.claude-dev" target="_blank"><strong>Download on VS Marketplace</strong></a>
-</td>
-<td align="center">
-<a href="https://discord.gg/cline" target="_blank"><strong>Discord</strong></a>
-</td>
-<td align="center">
-<a href="https://www.reddit.com/r/cline/" target="_blank"><strong>r/cline</strong></a>
-</td>
-<td align="center">
-<a href="https://github.com/cline/cline/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop" target="_blank"><strong>Feature Requests</strong></a>
-</td>
-<td align="center">
-<a href="https://docs.cline.bot/getting-started/getting-started-new-coders" target="_blank"><strong>Getting Started</strong></a>
-</td>
-</tbody>
-</table>
-</div>
+![MultiCoder Demo](assets/demo.gif)
 
-Meet Cline, an AI assistant that can use your **CLI** a**N**d **E**ditor.
+## 🤖 How it Works
 
-Thanks to [Claude 3.7 Sonnet's agentic coding capabilities](https://www.anthropic.com/claude/sonnet), Cline can handle complex software development tasks step-by-step. With tools that let him create & edit files, explore large projects, use the browser, and execute terminal commands (after you grant permission), he can assist you in ways that go beyond code completion or tech support. Cline can even use the Model Context Protocol (MCP) to create new tools and extend his own capabilities. While autonomous AI scripts traditionally run in sandboxed environments, this extension provides a human-in-the-loop GUI to approve every file change and terminal command, providing a safe and accessible way to explore the potential of agentic AI.
+MultiCoder introduces a structured, multi-agent workflow to tackle development tasks. The process is orchestrated by a central **Planner Agent**:
 
-1. Enter your task and add images to convert mockups into functional apps or fix bugs with screenshots.
-2. Cline starts by analyzing your file structure & source code ASTs, running regex searches, and reading relevant files to get up to speed in existing projects. By carefully managing what information is added to context, Cline can provide valuable assistance even for large, complex projects without overwhelming the context window.
-3. Once Cline has the information he needs, he can:
-    - Create and edit files + monitor linter/compiler errors along the way, letting him proactively fix issues like missing imports and syntax errors on his own.
-    - Execute commands directly in your terminal and monitor their output as he works, letting him e.g., react to dev server issues after editing a file.
-    - For web development tasks, Cline can launch the site in a headless browser, click, type, scroll, and capture screenshots + console logs, allowing him to fix runtime errors and visual bugs.
-4. When a task is completed, Cline will present the result to you with a terminal command like `open -a "Google Chrome" index.html`, which you run with a click of a button.
+1.  **Analyze & Plan:** The Planner Agent receives a user's request, analyzes the requirements, and breaks the task down into a detailed plan.
+2.  **Delegate:** It then delegates specific coding tasks to a dedicated **Coder Agent** and testing tasks to a **Tester Agent**.
+3.  **Execute & Report:** The Coder and Tester agents work on their assigned tasks and report their progress and results back to the Planner.
+4.  **Synthesize & Complete:** The Planner oversees the entire process, synthesizes the results, and presents the final solution to the user.
 
-> [!TIP]
-> Use the `CMD/CTRL + Shift + P` shortcut to open the command palette and type "Cline: Open In New Tab" to open the extension as a tab in your editor. This lets you use Cline side-by-side with your file explorer, and see how he changes your workspace more clearly.
+This collaborative approach allows MultiCoder to handle complex, multi-step tasks with greater accuracy and efficiency.
 
----
+### Workflow
 
-<img align="right" width="340" src="https://github.com/user-attachments/assets/3cf21e04-7ce9-4d22-a7b9-ba2c595e88a4">
+```mermaid
+%%{init: { "themeVariables": { "fontSize": "16px" }, "dagre": { "ranksep": 35 } } }%%
+graph TD
+    User["用户"] --> Planner_Start["Planner: 接收/分析请求"];
 
-### Use any API and Model
+    Planner_Start --> Planner_Plan["Planner: 更新 .agent/plan"];
+    Planner_Plan --> Planner_Decide{"Planner: 决定行动"};
 
-Cline supports API providers like OpenRouter, Anthropic, OpenAI, Google Gemini, AWS Bedrock, Azure, and GCP Vertex. You can also configure any OpenAI compatible API, or use a local model through LM Studio/Ollama. If you're using OpenRouter, the extension fetches their latest model list, allowing you to use the newest models as soon as they're available.
+    Planner_Decide -- 需要澄清? --> Planner_Ask["Planner: ask_followup_question"];
+    Planner_Ask --> User;
 
-The extension also keeps track of total tokens and API usage cost for the entire task loop and individual requests, keeping you informed of spend every step of the way.
+    Planner_Decide -- 分配编码任务 --> Planner_DelegateCoder["Planner: create_coder_agent / communicate_with_agent(Coder)"];
+    Planner_DelegateCoder --> Planner_WaitCoder["Planner: attempt_completion (等待Coder)"];
+    Planner_WaitCoder -- 任务 --> Coder_Work;
 
-<!-- Transparent pixel to create line break after floating image -->
+    subgraph Coder Agent Process
+        Coder_Work["Coder: 执行代码 (使用工具)"] --> Coder_Report["Coder: communicate_with_agent(Planner)"];
+        Coder_Report --> Coder_End["Coder: attempt_completion (子任务完成)"];
+    end
+    Coder_Report -- 报告 --> Planner_Decide
+    %% Planner继续处理或决定下一步
 
-<img width="2000" height="0" src="https://github.com/user-attachments/assets/ee14e6f7-20b8-4391-9091-8e8e25561929"><br>
+    Planner_Decide -- 分配测试任务 --> Planner_DelegateTester["Planner: communicate_with_agent(Tester)"];
+    Planner_DelegateTester --> Planner_WaitTester["Planner: attempt_completion (等待Tester)"];
+    Planner_WaitTester -- 任务 --> Tester_Work;
 
-<img align="left" width="370" src="https://github.com/user-attachments/assets/81be79a8-1fdb-4028-9129-5fe055e01e76">
+    subgraph Tester Agent Process
+        Tester_Work["Tester: 执行测试 (使用工具)"] --> Tester_Report["Tester: communicate_with_agent(Planner)"];
+        Tester_Report --> Tester_End["Tester: attempt_completion (子任务完成)"];
+    end
+    Tester_Report -- 报告 --> Planner_Decide
+    %% Planner继续处理或决定下一步
 
-### Run Commands in Terminal
+    Planner_Decide -- 所有任务完成 --> Planner_FinalReport["Planner: attempt_completion (向用户报告)"];
+    Planner_FinalReport --> End(("结束/等待新请求"));
 
-Thanks to the new [shell integration updates in VSCode v1.93](https://code.visualstudio.com/updates/v1_93#_terminal-shell-integration-api), Cline can execute commands directly in your terminal and receive the output. This allows him to perform a wide range of tasks, from installing packages and running build scripts to deploying applications, managing databases, and executing tests, all while adapting to your dev environment & toolchain to get the job done right.
+    %% Styling
+    classDef user fill:#E0BBE4,stroke:#333,stroke-width:2px;
+    classDef planner_main fill:#957DAD,stroke:#333,stroke-width:2px,color:white;
+    classDef planner_action fill:#C7CEEA,stroke:#333,stroke-width:1px;
+    classDef planner_wait fill:#FFFACD,stroke:#BDB76B,stroke-width:1px;
+    classDef coder_node fill:#D291BC,stroke:#333,stroke-width:2px;
+    classDef tester_node fill:#FEC8D8,stroke:#333,stroke-width:2px;
+    classDef decision fill:#A9DFBF,stroke:#333,stroke-width:2px;
+    classDef end_node fill:#D3D3D3,stroke:#333,stroke-width:1px;
 
-For long running processes like dev servers, use the "Proceed While Running" button to let Cline continue in the task while the command runs in the background. As Cline works he’ll be notified of any new terminal output along the way, letting him react to issues that may come up, such as compile-time errors when editing files.
 
-<!-- Transparent pixel to create line break after floating image -->
+    class User user
+    class Planner_Decide decision
+    class Planner_Start,Planner_Plan,Planner_Ask,Planner_DelegateCoder,Planner_DelegateTester,Planner_FinalReport planner_action
+    class Planner_WaitCoder,Planner_WaitTester planner_wait
+    class Coder_Work,Coder_Report,Coder_End coder_node
+    class Tester_Work,Tester_Report,Tester_End tester_node
+    class End end_node
+```
 
-<img width="2000" height="0" src="https://github.com/user-attachments/assets/ee14e6f7-20b8-4391-9091-8e8e25561929"><br>
+## ✨ Features
 
-<img align="right" width="400" src="https://github.com/user-attachments/assets/c5977833-d9b8-491e-90f9-05f9cd38c588">
+*   **Multi-Agent Architecture:** Utilizes specialized agents (Planner, Coder, Tester) for a clear separation of concerns and more robust task execution.
+*   **Automated Task Decomposition:** The Planner agent can break down high-level user requests into concrete, actionable steps.
+*   **Intelligent Tool Usage:** Agents are equipped with a variety of tools to interact with the file system, run terminal commands, and search for information.
+*   **Extensible and Configurable:** Built on the solid foundation of Cline, allowing for extensive configuration and the addition of new capabilities.
+*   **Interactive Workflow:** While the agents work autonomously, you are always in control and can provide feedback or clarification when needed.
 
-### Create and Edit Files
+## 🚀 Getting Started
 
-Cline can create and edit files directly in your editor, presenting you a diff view of the changes. You can edit or revert Cline's changes directly in the diff view editor, or provide feedback in chat until you're satisfied with the result. Cline also monitors linter/compiler errors (missing imports, syntax errors, etc.) so he can fix issues that come up along the way on his own.
+*Installation and setup instructions will go here. For now, this is based on the original Cline extension.*
 
-All changes made by Cline are recorded in your file's Timeline, providing an easy way to track and revert modifications if needed.
+1.  Install the **MultiCoder** extension from the VS Code Marketplace (link to be added).
+2.  Open the MultiCoder sidebar in VS Code.
+3.  Start your first task by describing what you want to achieve.
 
-<!-- Transparent pixel to create line break after floating image -->
+## ⚙️ Configuration
 
-<img width="2000" height="0" src="https://github.com/user-attachments/assets/ee14e6f7-20b8-4391-9091-8e8e25561929"><br>
+You can configure MultiCoder's behavior through the VS Code settings. Many options are inherited from Cline:
 
-<img align="left" width="370" src="https://github.com/user-attachments/assets/bc2e85ba-dfeb-4fe6-9942-7cfc4703cbe5">
+*   `cline.preferredLanguage`: Set the language for communication with the agent.
+*   `cline.enableCheckpoints`: Enable or disable workspace checkpoints (uses `git`).
+*   `cline.disableBrowserTool`: Disable the browser tool.
+*   And more...
 
-### Use the Browser
+Check the extension settings in VS Code for a full list of configurable options.
 
-With Claude 3.5 Sonnet's new [Computer Use](https://www.anthropic.com/news/3-5-models-and-computer-use) capability, Cline can launch a browser, click elements, type text, and scroll, capturing screenshots and console logs at each step. This allows for interactive debugging, end-to-end testing, and even general web use! This gives him autonomy to fixing visual bugs and runtime issues without you needing to handhold and copy-pasting error logs yourself.
+## 🤝 Contributing
 
-Try asking Cline to "test the app", and watch as he runs a command like `npm run dev`, launches your locally running dev server in a browser, and performs a series of tests to confirm that everything works. [See a demo here.](https://x.com/sdrzn/status/1850880547825823989)
+Contributions are welcome! If you have ideas for new features or improvements, please open an issue or submit a pull request on our [GitHub repository](https://github.com/cline/cline).
 
-<!-- Transparent pixel to create line break after floating image -->
+## 📄 License
 
-<img width="2000" height="0" src="https://github.com/user-attachments/assets/ee14e6f7-20b8-4391-9091-8e8e25561929"><br>
-
-<img align="right" width="350" src="https://github.com/user-attachments/assets/ac0efa14-5c1f-4c26-a42d-9d7c56f5fadd">
-
-### "add a tool that..."
-
-Thanks to the [Model Context Protocol](https://github.com/modelcontextprotocol), Cline can extend his capabilities through custom tools. While you can use [community-made servers](https://github.com/modelcontextprotocol/servers), Cline can instead create and install tools tailored to your specific workflow. Just ask Cline to "add a tool" and he will handle everything, from creating a new MCP server to installing it into the extension. These custom tools then become part of Cline's toolkit, ready to use in future tasks.
-
--   "add a tool that fetches Jira tickets": Retrieve ticket ACs and put Cline to work
--   "add a tool that manages AWS EC2s": Check server metrics and scale instances up or down
--   "add a tool that pulls the latest PagerDuty incidents": Fetch details and ask Cline to fix bugs
-
-<!-- Transparent pixel to create line break after floating image -->
-
-<img width="2000" height="0" src="https://github.com/user-attachments/assets/ee14e6f7-20b8-4391-9091-8e8e25561929"><br>
-
-<img align="left" width="360" src="https://github.com/user-attachments/assets/7fdf41e6-281a-4b4b-ac19-020b838b6970">
-
-### Add Context
-
-**`@url`:** Paste in a URL for the extension to fetch and convert to markdown, useful when you want to give Cline the latest docs
-
-**`@problems`:** Add workspace errors and warnings ('Problems' panel) for Cline to fix
-
-**`@file`:** Adds a file's contents so you don't have to waste API requests approving read file (+ type to search files)
-
-**`@folder`:** Adds folder's files all at once to speed up your workflow even more
-
-<!-- Transparent pixel to create line break after floating image -->
-
-<img width="2000" height="0" src="https://github.com/user-attachments/assets/ee14e6f7-20b8-4391-9091-8e8e25561929"><br>
-
-<img align="right" width="350" src="https://github.com/user-attachments/assets/140c8606-d3bf-41b9-9a1f-4dbf0d4c90cb">
-
-### Checkpoints: Compare and Restore
-
-As Cline works through a task, the extension takes a snapshot of your workspace at each step. You can use the 'Compare' button to see a diff between the snapshot and your current workspace, and the 'Restore' button to roll back to that point.
-
-For example, when working with a local web server, you can use 'Restore Workspace Only' to quickly test different versions of your app, then use 'Restore Task and Workspace' when you find the version you want to continue building from. This lets you safely explore different approaches without losing progress.
-
-<!-- Transparent pixel to create line break after floating image -->
-
-<img width="2000" height="0" src="https://github.com/user-attachments/assets/ee14e6f7-20b8-4391-9091-8e8e25561929"><br>
-
-## Contributing
-
-To contribute to the project, start with our [Contributing Guide](CONTRIBUTING.md) to learn the basics. You can also join our [Discord](https://discord.gg/cline) to chat with other contributors in the `#contributors` channel. If you're looking for full-time work, check out our open positions on our [careers page](https://cline.bot/join-us)!
-
-<details>
-<summary>Local Development Instructions</summary>
-
-1. Clone the repository _(Requires [git-lfs](https://git-lfs.com/))_:
-    ```bash
-    git clone https://github.com/cline/cline.git
-    ```
-2. Open the project in VSCode:
-    ```bash
-    code cline
-    ```
-3. Install the necessary dependencies for the extension and webview-gui:
-    ```bash
-    npm run install:all
-    ```
-4. Launch by pressing `F5` (or `Run`->`Start Debugging`) to open a new VSCode window with the extension loaded. (You may need to install the [esbuild problem matchers extension](https://marketplace.visualstudio.com/items?itemName=connor4312.esbuild-problem-matchers) if you run into issues building the project.)
-
-</details>
-
-<details>
-<summary>Creating a Pull Request</summary>
-
-1. Before creating a PR, generate a changeset entry:
-    ```bash
-    npm run changeset
-    ```
-   This will prompt you for:
-   - Type of change (major, minor, patch)
-     - `major` → breaking changes (1.0.0 → 2.0.0)
-     - `minor` → new features (1.0.0 → 1.1.0)
-     - `patch` → bug fixes (1.0.0 → 1.0.1)
-   - Description of your changes
-
-2. Commit your changes and the generated `.changeset` file
-
-3. Push your branch and create a PR on GitHub. Our CI will:
-   - Run tests and checks
-   - Changesetbot will create a comment showing the version impact
-   - When merged to main, changesetbot will create a Version Packages PR
-   - When the Version Packages PR is merged, a new release will be published
-
-</details>
-
-
-## License
-
-[Apache 2.0 © 2025 Cline Bot Inc.](./LICENSE)
+This project is licensed under the Apache-2.0 License. See the [LICENSE](LICENSE) file for details.
