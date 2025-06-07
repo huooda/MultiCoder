@@ -5,7 +5,7 @@
 
 **MultiCoder is a multi-agent collaborative code editor based on Cline. It leverages a team of AI agents, including a Planner, a Coder, and a Tester, to autonomously understand requirements, write code, and verify the results.**
 
-![MultiCoder Demo](assets/demo.gif)
+![MultiCoder Demo](assets/multicoder-ui.png)
 
 ## 🤖 How it Works
 
