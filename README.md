@@ -107,6 +107,10 @@ Check the extension settings in VS Code for a full list of configurable options.
 
 Contributions are welcome! If you have ideas for new features or improvements, please open an issue or submit a pull request on our [GitHub repository](https://github.com/cline/cline).
 
+## 🙏 Acknowledgements
+
+MultiCoder is proudly based on the [Cline](https://github.com/cline/cline) project. We extend our heartfelt gratitude to the original developers for their foundational work and for making it available to the community under the Apache-2.0 License.
+
 ## 📄 License
 
 This project is licensed under the Apache-2.0 License. See the [LICENSE](LICENSE) file for details.
